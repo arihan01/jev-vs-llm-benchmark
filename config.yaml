@@ -1,0 +1,26 @@
+seed: 42
+repeats: 3
+concurrency: 5
+timeout_s: 60
+openrouter_base: https://openrouter.ai/api/v1
+jev_decisions_url: https://openrouter.ai/api/alpha/decisions
+# price_in / price_out: USD per million tokens, used only by `bench.run --dry` for a
+# cost estimate. Real cost is read from each response's usage.cost.
+# Check current prices at https://openrouter.ai/models before relying on the estimate.
+engines:
+  jev:  { kind: jev, model: typesafe/jev-1.13, price_in: 0.042, price_out: 0 }
+  low:  { kind: llm, model: qwen/qwen3.5-9b, reasoning: off, price_in: 0.05, price_out: 0.15 }
+  high: { kind: llm, model: anthropic/claude-opus-5.5, price_in: 5, price_out: 25 }
+perturb_generator: { model: google/gemini-3.5-flash-lite }   # not under test
+experiments:
+  E1: { type: choice, task: choice }   # task = key into data/{task}.jsonl
+  E2: { type: noul,   task: noul }
+  E3: { type: score,  task: score }
+samples: 5
+sample_perturbations: [typo, paraphrase, padding, distractor, injection]   # S1..S5 in order
+tasks:
+  choice: { dataset: PolyAI/banking77, split: test }
+  score:  { dataset: Yelp/yelp_review_full, split: test, truncate_chars: 2000 }
+  noul:   { dataset: google/boolq, split: validation }
+# Fallbacks if a dataset is unavailable: choice fancyzhx/ag_news · score SetFit/sst5 · noul stanfordnlp/sst2
+# Model fallbacks: low meta-llama/llama-3.1-8b-instruct · high anthropic/claude-haiku-4.5

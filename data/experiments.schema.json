@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "experiments.schema.json",
+  "title": "Jev vs LLM mini-benchmark experiments",
+  "description": "data/experiments.json: experiments E1..En, each with samples S1..Sm, each with questions Q1..Qp. A null gold or TODO text is schema-valid (it is a work in progress); bench.build_experiments.todo_report decides whether the file is ready to run.",
+  "type": "object",
+  "minProperties": 1,
+  "patternProperties": {
+    "^E[0-9]+$": { "$ref": "#/$defs/experiment" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "text": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        {
+          "type": "object",
+          "properties": {
+            "passage": { "type": "string", "minLength": 1 },
+            "question": { "type": "string", "minLength": 1 }
+          },
+          "required": ["passage", "question"],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "question": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^Q[0-9]+$" },
+        "type": { "enum": ["choice", "noul", "score"] },
+        "instructions": { "type": "string", "minLength": 1 },
+        "options": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 255,
+          "additionalProperties": { "type": "string", "minLength": 1 }
+        },
+        "gold": { "type": ["string", "null"] }
+      },
+      "required": ["id", "type", "instructions", "options", "gold"],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "noul" } } },
+          "then": { "properties": { "options": { "required": ["yes", "no"], "maxProperties": 2 } } }
+        },
+        {
+          "if": { "properties": { "type": { "const": "score" } } },
+          "then": {
+            "properties": {
+              "options": { "minProperties": 2, "maxProperties": 10, "propertyNames": { "pattern": "^[0-9]$" } }
+            }
+          }
+        }
+      ]
+    },
+    "sample": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^S[0-9]+$" },
+        "source_id": { "type": "string", "minLength": 1 },
+        "perturbation": {
+          "enum": ["typo", "paraphrase", "paraphrase (pending)", "padding", "distractor", "injection"]
+        },
+        "clean_text": { "$ref": "#/$defs/text" },
+        "text": { "$ref": "#/$defs/text" },
+        "injection_target": { "type": ["string", "null"] },
+        "questions": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/question" } }
+      },
+      "required": ["id", "source_id", "perturbation", "clean_text", "text", "injection_target", "questions"],
+      "additionalProperties": false
+    },
+    "experiment": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["choice", "noul", "score"] },
+        "task": { "enum": ["choice", "noul", "score"] },
+        "samples": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/sample" } }
+      },
+      "required": ["type", "task", "samples"],
+      "additionalProperties": false
+    }
+  }
+}

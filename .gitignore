@@ -1,0 +1,17 @@
+.env
+.venv/
+.cache/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+results/*.parquet
+results/*.csv
+results/verdict.md
+results/figures/
+!results/.gitkeep
