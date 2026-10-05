@@ -53,6 +53,23 @@ def test_score_rounding_clamps(score, label):
     assert JEV.parse(Q_SCORE, {"Q2": {"type": "score", "score": score}}).label == label
 
 
+def test_score_label_is_most_likely_level_not_rounded_mean():
+    probs = {"0": 0.0, "1": 0.44, "2": 0.56}
+    p = JEV.parse(Q_SCORE, {"Q2": {"type": "score", "score": 1.56, "probabilities": probs}})
+    assert p.label == "2" and p.confidence == pytest.approx(0.56) and p.value == 1.56
+
+
+@pytest.mark.parametrize("noul, label, conf", [(73, "yes", 1.0), (-0.2, "no", 1.0)])
+def test_noul_out_of_range_is_clamped(noul, label, conf):
+    p = JEV.parse(prompts.q1("noul", "yes"), {"Q1": {"type": "noul", "noul": noul}})
+    assert p.label == label and p.confidence == conf and 0 <= p.value <= 1
+
+
+def test_non_numeric_reported_confidence_is_malformed_not_a_crash():
+    p = JEV.parse(Q_SCORE, {"Q2": {"type": "score", "score": 1.0, "confidence": "high"}})
+    assert not p.valid and p.error.startswith("malformed answer")
+
+
 def test_score_confidence_falls_back_to_reported_confidence():
     p = JEV.parse(Q_SCORE, {"Q2": {"type": "score", "score": 1.0, "confidence": 0.42}})
     assert p.confidence == 0.42

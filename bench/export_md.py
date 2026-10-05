@@ -69,7 +69,8 @@ CODE_WALK: list[tuple[Callable, str]] = [
     (
         JevAdapter.parse,
         "Reading Jev's answer: the chosen option and its probability distribution over options "
-        "(Noul returns P(yes); Score returns a value that is rounded to a level).",
+        "(Noul returns P(yes); Score takes the most likely level as the label, the same rule as the LLM's "
+        "single label, and keeps the expected score for MAE).",
     ),
     (
         LLMAdapter.parse,

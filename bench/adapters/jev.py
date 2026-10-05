@@ -56,15 +56,22 @@ class JevAdapter(Adapter):
             elif kind == "score":
                 p.value = float(ans["score"])
                 p.probs = {str(k): float(v) for k, v in (ans.get("probabilities") or {}).items()}
-                p.label = str(min(max(round(p.value), 0), len(keys) - 1))
+                # The label is the most likely level, the same rule the LLM's single label follows;
+                # the expected score stays in `value` for MAE. Rounding the mean would differ when the
+                # mass is split between two neighbouring levels. Without probabilities, round and clamp.
+                if p.probs:
+                    p.label = max(p.probs, key=p.probs.__getitem__)
+                else:
+                    p.label = str(min(max(round(p.value), 0), len(keys) - 1))
             else:
-                py = float(ans["noul"])
+                py = min(max(float(ans["noul"]), 0.0), 1.0)
                 p.value = py
                 p.probs = {"yes": py, "no": 1 - py}
                 p.label = "yes" if py >= 0.5 else "no"
+            reported = float(ans.get("confidence") or 0.0)
         except (KeyError, TypeError, ValueError) as e:
             p.error = f"malformed answer: {e}"
             return p
         p.valid = p.label in keys
-        p.confidence = p.probs.get(p.label, float(ans.get("confidence") or 0.0)) if p.valid else 0.0
+        p.confidence = p.probs.get(p.label, reported) if p.valid else 0.0
         return p
