@@ -15,7 +15,8 @@ def correct(df: pd.DataFrame) -> np.ndarray:
 
 
 def conf(df: pd.DataFrame) -> np.ndarray:
-    return np.where(df["valid"].astype(bool), df["confidence"].astype(float), 0.0)
+    """Confidence of valid answers; invalid answers and a missing value count as 0."""
+    return np.where(df["valid"].astype(bool), df["confidence"].astype(float).fillna(0.0), 0.0)
 
 
 def p_of(df: pd.DataFrame, labels) -> np.ndarray:
@@ -52,13 +53,12 @@ def abs_err(df: pd.DataFrame) -> np.ndarray:
 def cell_metrics(g: pd.DataFrame) -> dict:
     y = correct(g)
     labels = g["label"].where(g["valid"].astype(bool))
-    majority = labels.mode()
     pg = p_of(g, g["gold"])
     out = {
         "repeats": len(g),
         "gold": g["gold"].iloc[0],
         "labels": "/".join(str(x) for x in g["label"]),
-        "correct_majority": bool(len(majority) and majority.iloc[0] == g["gold"].iloc[0] and y.sum() * 2 > len(g)),
+        "correct_majority": bool(y.sum() * 2 > len(g)),
         "correct_rate": float(y.mean()),
         "consistent": bool(labels.notna().all() and labels.nunique() == 1),
         "invalid": int((~g["valid"].astype(bool)).sum()),

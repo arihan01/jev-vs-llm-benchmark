@@ -88,3 +88,8 @@ def test_engine_with_only_failures_has_nan_quality():
     assert agg.answered == 0 and agg.error_rate == 1.0
     assert all(pd.isna(agg[k]) for k in ("accuracy", "consistency", "invalid_rate", "cost_per_100_questions"))
     assert metrics.cells(rows([None], "a").assign(status=503)).empty
+
+
+def test_conf_treats_nan_confidence_as_zero():
+    df = pd.DataFrame({"valid": [True, True, False], "confidence": [0.8, float("nan"), 0.9]})
+    assert metrics.conf(df).tolist() == [0.8, 0.0, 0.0]
