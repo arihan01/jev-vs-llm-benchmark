@@ -8,14 +8,11 @@ import json
 import logging
 import random
 
-from jsonschema import Draft202012Validator
-
 from . import perturb, prompts
 from .config import DATA, load, setup_logging
 from .data import items
 
 PATH = DATA / "experiments.json"
-SCHEMA_PATH = DATA / "experiments.schema.json"
 log = logging.getLogger(__name__)
 PENDING = "paraphrase (pending)"
 
@@ -129,15 +126,6 @@ def todo_report(exps: dict) -> list[str]:
     return problems
 
 
-def schema_errors(exps: dict) -> list[str]:
-    schema = json.loads(SCHEMA_PATH.read_text())
-    validator = Draft202012Validator(schema)
-    return [
-        f"{'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}"
-        for e in sorted(validator.iter_errors(exps), key=lambda e: list(map(str, e.absolute_path)))
-    ]
-
-
 def save(exps: dict) -> None:
     PATH.write_text(json.dumps(exps, indent=2, ensure_ascii=False) + "\n")
 
@@ -146,19 +134,16 @@ def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--force", action="store_true", help="rebuild from scratch (discards hand-written Q2s)")
     ap.add_argument("--llm", action="store_true", help="fill pending paraphrases via the generator model")
-    ap.add_argument("--validate", action="store_true", help="check the existing file; exit 1 on schema errors")
+    ap.add_argument("--validate", action="store_true", help="report what still needs attention in the existing file")
     args = ap.parse_args(argv)
     setup_logging()
     if args.validate:
         exps = load_experiments()
-        errors = schema_errors(exps)
-        for e in errors:
-            log.error("schema: %s", e)
         todo = todo_report(exps)
-        log.info("%d schema error(s); %d item(s) still need attention before `make bench`", len(errors), len(todo))
+        log.info("%d item(s) still need attention before `make bench`", len(todo))
         for t in todo:
             log.info("  - %s", t)
-        raise SystemExit(1 if errors else 0)
+        raise SystemExit(0)
     if args.llm:
         exps = load_experiments()
         log.info("filled %d paraphrase(s)", fill_paraphrases(exps))

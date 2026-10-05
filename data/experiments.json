@@ -99,21 +99,23 @@
           {
             "id": "Q2",
             "type": "choice",
-            "instructions": "TODO: a second question about the message",
+            "instructions": "Who is the account being asked about for?",
             "options": {
-              "TODO_a": "TODO",
-              "TODO_b": "TODO"
+              "self": "the customer's own account",
+              "family_member": "a child, partner or relative",
+              "business": "a company account",
+              "unclear": "cannot tell"
             },
-            "gold": null
+            "gold": "family_member"
           }
         ]
       },
       {
         "id": "S2",
         "source_id": "choice-197",
-        "perturbation": "paraphrase (pending)",
+        "perturbation": "paraphrase",
         "clean_text": "What is the €1 fee for?",
-        "text": "What is the €1 fee for?",
+        "text": "What is the purpose of the €1 fee?",
         "injection_target": null,
         "questions": [
           {
@@ -204,12 +206,14 @@
           {
             "id": "Q2",
             "type": "choice",
-            "instructions": "TODO: a second question about the message",
+            "instructions": "What is the customer asking for?",
             "options": {
-              "TODO_a": "TODO",
-              "TODO_b": "TODO"
+              "explanation": "wants something explained",
+              "refund": "wants money back",
+              "cancellation": "wants to cancel or close something",
+              "new_product": "wants to order or open something"
             },
-            "gold": null
+            "gold": "explanation"
           }
         ]
       },
@@ -309,12 +313,14 @@
           {
             "id": "Q2",
             "type": "choice",
-            "instructions": "TODO: a second question about the message",
+            "instructions": "Which product area does this concern?",
             "options": {
-              "TODO_a": "TODO",
-              "TODO_b": "TODO"
+              "card": "physical or virtual card",
+              "refund_or_payment": "a payment, refund or charge",
+              "top_up": "adding money to the account",
+              "account_access": "login, identity or verification"
             },
-            "gold": null
+            "gold": "refund_or_payment"
           }
         ]
       },
@@ -414,12 +420,14 @@
           {
             "id": "Q2",
             "type": "choice",
-            "instructions": "TODO: a second question about the message",
+            "instructions": "Which product area does this concern?",
             "options": {
-              "TODO_a": "TODO",
-              "TODO_b": "TODO"
+              "card": "physical or virtual card",
+              "refund_or_payment": "a payment, refund or charge",
+              "top_up": "adding money to the account",
+              "account_access": "login, identity or verification"
             },
-            "gold": null
+            "gold": "top_up"
           }
         ]
       },
@@ -519,12 +527,13 @@
           {
             "id": "Q2",
             "type": "choice",
-            "instructions": "TODO: a second question about the message",
+            "instructions": "How does the customer sound?",
             "options": {
-              "TODO_a": "TODO",
-              "TODO_b": "TODO"
+              "frustrated": "annoyed or angry",
+              "calm": "neutral, matter-of-fact",
+              "grateful": "thankful or pleased"
             },
-            "gold": null
+            "gold": "frustrated"
           }
         ]
       }
@@ -561,25 +570,25 @@
           {
             "id": "Q2",
             "type": "noul",
-            "instructions": "TODO: a second yes/no question about the passage",
+            "instructions": "Was the novel written by a single author?",
             "options": {
               "yes": "The passage supports answering the question with yes.",
               "no": "The passage supports answering the question with no."
             },
-            "gold": null
+            "gold": "no"
           }
         ]
       },
       {
         "id": "S2",
         "source_id": "noul-90",
-        "perturbation": "paraphrase (pending)",
+        "perturbation": "paraphrase",
         "clean_text": {
           "passage": "As a unit of culinary measure, a level dessertspoon (dstspn.) equals two teaspoons, or 10 milliliters, whereas a U.S. tablespoon is three teaspoons (15ml or half a fluid ounce) in the U.S., and two dessertspoons, i.e. four teaspoons (20ml or two thirds of a fluid ounce) in Britain and Australia, which is the old British standard. For dry ingredients, a rounded or heaped teaspoonful is often specified instead.",
           "question": "is a tablespoon bigger than a dessert spoon"
         },
         "text": {
-          "passage": "As a unit of culinary measure, a level dessertspoon (dstspn.) equals two teaspoons, or 10 milliliters, whereas a U.S. tablespoon is three teaspoons (15ml or half a fluid ounce) in the U.S., and two dessertspoons, i.e. four teaspoons (20ml or two thirds of a fluid ounce) in Britain and Australia, which is the old British standard. For dry ingredients, a rounded or heaped teaspoonful is often specified instead.",
+          "passage": "In culinary measurement, a level dessertspoon (dstspn.) equals two teaspoons, or 10 milliliters. A U.S. tablespoon contains three teaspoons (15 ml, or half a fluid ounce) in the United States, whereas in Britain and Australia it is defined as two dessertspoons—four teaspoons, or 20 ml (about two‑thirds of a fluid ounce)—reflecting the former British standard. For dry ingredients, recipes often call for a rounded or heaping teaspoon instead of a level one.",
           "question": "is a tablespoon bigger than a dessert spoon"
         },
         "injection_target": null,
@@ -597,12 +606,12 @@
           {
             "id": "Q2",
             "type": "noul",
-            "instructions": "TODO: a second yes/no question about the passage",
+            "instructions": "Does the passage say a U.S. tablespoon equals four teaspoons?",
             "options": {
               "yes": "The passage supports answering the question with yes.",
               "no": "The passage supports answering the question with no."
             },
-            "gold": null
+            "gold": "no"
           }
         ]
       },
@@ -633,12 +642,12 @@
           {
             "id": "Q2",
             "type": "noul",
-            "instructions": "TODO: a second yes/no question about the passage",
+            "instructions": "Did all three deaths described happen in the same year?",
             "options": {
               "yes": "The passage supports answering the question with yes.",
               "no": "The passage supports answering the question with no."
             },
-            "gold": null
+            "gold": "no"
           }
         ]
       },
@@ -669,12 +678,12 @@
           {
             "id": "Q2",
             "type": "noul",
-            "instructions": "TODO: a second yes/no question about the passage",
+            "instructions": "Did the Black Death reach England in 1348?",
             "options": {
               "yes": "The passage supports answering the question with yes.",
               "no": "The passage supports answering the question with no."
             },
-            "gold": null
+            "gold": "yes"
           }
         ]
       },
@@ -705,12 +714,12 @@
           {
             "id": "Q2",
             "type": "noul",
-            "instructions": "TODO: a second yes/no question about the passage",
+            "instructions": "Is the volume change of these gels described as diffusion-based?",
             "options": {
               "yes": "The passage supports answering the question with yes.",
               "no": "The passage supports answering the question with no."
             },
-            "gold": null
+            "gold": "yes"
           }
         ]
       }
@@ -744,22 +753,22 @@
           {
             "id": "Q2",
             "type": "score",
-            "instructions": "TODO: e.g. How likely is the reviewer to return?",
+            "instructions": "How likely is the reviewer to return?",
             "options": {
-              "0": "TODO",
-              "1": "TODO",
-              "2": "TODO"
+              "0": "unlikely to return",
+              "1": "might return",
+              "2": "very likely to return"
             },
-            "gold": null
+            "gold": "2"
           }
         ]
       },
       {
         "id": "S2",
         "source_id": "score-25857",
-        "perturbation": "paraphrase (pending)",
+        "perturbation": "paraphrase",
         "clean_text": "i always like going there...the food is always good and service pretty good!\\nlove the outside terrace.",
-        "text": "i always like going there...the food is always good and service pretty good!\\nlove the outside terrace.",
+        "text": "I always enjoy visiting; the food is consistently good and the service is quite nice. I especially love the outdoor terrace.",
         "injection_target": null,
         "questions": [
           {
@@ -778,13 +787,13 @@
           {
             "id": "Q2",
             "type": "score",
-            "instructions": "TODO: e.g. How likely is the reviewer to return?",
+            "instructions": "How likely is the reviewer to return?",
             "options": {
-              "0": "TODO",
-              "1": "TODO",
-              "2": "TODO"
+              "0": "unlikely to return",
+              "1": "might return",
+              "2": "very likely to return"
             },
-            "gold": null
+            "gold": "2"
           }
         ]
       },
@@ -812,13 +821,13 @@
           {
             "id": "Q2",
             "type": "score",
-            "instructions": "TODO: e.g. How likely is the reviewer to return?",
+            "instructions": "How does the reviewer rate the price?",
             "options": {
-              "0": "TODO",
-              "1": "TODO",
-              "2": "TODO"
+              "0": "expensive",
+              "1": "fair or not mentioned",
+              "2": "cheap or good value"
             },
-            "gold": null
+            "gold": "2"
           }
         ]
       },
@@ -846,13 +855,13 @@
           {
             "id": "Q2",
             "type": "score",
-            "instructions": "TODO: e.g. How likely is the reviewer to return?",
+            "instructions": "How likely is the reviewer to return?",
             "options": {
-              "0": "TODO",
-              "1": "TODO",
-              "2": "TODO"
+              "0": "unlikely to return",
+              "1": "might return",
+              "2": "very likely to return"
             },
-            "gold": null
+            "gold": "0"
           }
         ]
       },
@@ -880,13 +889,13 @@
           {
             "id": "Q2",
             "type": "score",
-            "instructions": "TODO: e.g. How likely is the reviewer to return?",
+            "instructions": "How positive is the reviewer about the food specifically?",
             "options": {
-              "0": "TODO",
-              "1": "TODO",
-              "2": "TODO"
+              "0": "negative",
+              "1": "mixed or neutral",
+              "2": "positive"
             },
-            "gold": null
+            "gold": "2"
           }
         ]
       }

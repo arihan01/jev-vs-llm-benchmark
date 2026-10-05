@@ -7,18 +7,14 @@ import plotly.graph_objects as go
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bench import metrics
-from bench.config import RESULTS
+from bench.config import engine_order, results_dir
 
-ENGINE_ORDER = ["jev", "low", "high"]
 COLORS = {"jev": "#2a6fdb", "low": "#e07b39", "high": "#3a9d5d"}
 
 
 def load():
-    return pd.read_parquet(RESULTS / "raw.parquet"), pd.read_csv(RESULTS / "scorecard.csv")
-
-
-def _order(engines):
-    return [e for e in ENGINE_ORDER if e in set(engines)] + sorted(set(engines) - set(ENGINE_ORDER))
+    out = results_dir()
+    return pd.read_parquet(out / "raw.parquet"), pd.read_csv(out / "scorecard.csv")
 
 
 def correctness_grid(raw, exp):
@@ -31,7 +27,9 @@ def correctness_grid(raw, exp):
         for labels, g in zip(c["labels"], c["gold"], strict=True)
     ]
     cols = sorted(c["col"].unique(), key=lambda s: (int(s[1 : s.index("Q")]), s[s.index("Q") :]))
-    z = c.pivot(index="engine", columns="col", values="correct_rate").reindex(index=_order(c.engine), columns=cols)
+    z = c.pivot(index="engine", columns="col", values="correct_rate").reindex(
+        index=engine_order(c.engine), columns=cols
+    )
     txt = c.pivot(index="engine", columns="col", values="marks").reindex(index=z.index, columns=cols)
     answers = c.pivot(index="engine", columns="col", values="labels").reindex(index=z.index, columns=cols)
     gold = c.drop_duplicates("col").set_index("col")["gold"].reindex(cols)
@@ -65,14 +63,14 @@ def latency_box(raw):
         facet_col="exp",
         points="all",
         color_discrete_map=COLORS,
-        category_orders={"engine": _order(d.engine)},
+        category_orders={"engine": engine_order(d.engine)},
         title="Latency per call (ms)",
     )
 
 
 def tokens_cost(sc):
     fig = go.Figure()
-    for e in _order(sc.engine):
+    for e in engine_order(sc.engine):
         d = sc[sc.engine == e]
         fig.add_bar(
             x=d.exp,
@@ -97,7 +95,7 @@ def consistency_bars(sc):
         barmode="group",
         range_y=[0, 1.05],
         color_discrete_map=COLORS,
-        category_orders={"engine": _order(sc.engine)},
+        category_orders={"engine": engine_order(sc.engine)},
         title="Consistency: share of questions with 3 identical valid answers",
     ).update_layout(yaxis_tickformat=".0%")
 
@@ -112,27 +110,6 @@ def accuracy_by_perturbation(raw):
         barmode="group",
         range_y=[0, 1.05],
         color_discrete_map=COLORS,
-        category_orders={"engine": _order(d.engine)},
+        category_orders={"engine": engine_order(d.engine)},
         title="Accuracy by perturbation (all experiments)",
     ).update_layout(yaxis_tickformat=".0%")
-
-
-def export_pngs():
-    """Static fallback for the dashboard; needs `pip install kaleido`."""
-    raw, sc = load()
-    out = RESULTS / "figures"
-    out.mkdir(exist_ok=True)
-    figs = {f"grid_{e}": correctness_grid(raw, e) for e in sorted(raw.exp.unique())}
-    figs |= {
-        "latency": latency_box(raw),
-        "tokens_cost": tokens_cost(sc),
-        "consistency": consistency_bars(sc),
-        "perturbation": accuracy_by_perturbation(raw),
-    }
-    for name, fig in figs.items():
-        fig.write_image(out / f"{name}.png", width=1100, height=500, scale=2)
-    print(f"wrote PNGs to {out}")
-
-
-if __name__ == "__main__":
-    export_pngs()

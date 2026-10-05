@@ -1,6 +1,8 @@
+import json
 import random
 
 import httpx
+import pytest
 import respx
 
 from bench import build_experiments, perturb
@@ -68,3 +70,36 @@ def test_paraphrase_calls_generator_once_then_uses_cache(tmp_path, monkeypatch):
     assert perturb.paraphrase("noul", "noul-1", text) == {"passage": "A new passage.", "question": "q"}
     assert route.call_count == 1
     assert route.calls[0].request.headers["Authorization"] == "Bearer sk-or-v1-test"
+
+
+@respx.mock
+def test_generator_cache_key_includes_model(tmp_path, monkeypatch):
+    from bench import cache, config
+
+    monkeypatch.setattr(cache, "CACHE", tmp_path)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-test")
+    route = respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        side_effect=lambda req: httpx.Response(
+            200, json={"choices": [{"message": {"content": "from " + json.loads(req.content)["model"]}}]}
+        )
+    )
+    assert perturb.paraphrase("score", "s-1", "Good food.") == "from google/gemini-3.5-flash-lite"
+    config.use_config(config.ROOT / "config.free.yaml")
+    try:
+        assert perturb.paraphrase("score", "s-1", "Good food.") == "from google/gemma-4-26b-a4b-it:free"
+    finally:
+        config.use_config(None)
+    assert route.call_count == 2
+
+
+@respx.mock
+def test_generator_daily_limit_exits_cleanly(tmp_path, monkeypatch):
+    from bench import cache
+
+    monkeypatch.setattr(cache, "CACHE", tmp_path)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-test")
+    respx.post("https://openrouter.ai/api/v1/chat/completions").mock(
+        return_value=httpx.Response(429, json={"error": {"message": "Rate limit exceeded: free-models-per-day"}})
+    )
+    with pytest.raises(SystemExit, match="daily request limit; re-run tomorrow"):
+        perturb.paraphrase("score", "s-1", "Good food.")

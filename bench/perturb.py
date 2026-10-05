@@ -90,29 +90,33 @@ def paraphrase_prompt(task: str, text) -> str:
 
 
 def paraphrase(task: str, source_id: str, text):
+    """Generator-model paraphrase, cached on disk. The cache key includes the
+    generator model, so configs with different generators never share output."""
+    import asyncio
+
     import httpx
 
+    from .adapters.base import Adapter, DailyLimitError
     from .cache import get, put
     from .config import headers, load
 
     cfg = load()
+    model = cfg["perturb_generator"]["model"]
     prompt = paraphrase_prompt(task, text)
-    k = f"generator|{task}|{source_id}|paraphrase|{hashlib.sha1(prompt.encode()).hexdigest()[:10]}"
+    k = f"generator|{model}|{task}|{source_id}|paraphrase|{hashlib.sha1(prompt.encode()).hexdigest()[:10]}"
     rec = get("_generator", task, k)
     if rec is None:
-        r = httpx.post(
-            cfg["openrouter_base"].rstrip("/") + "/chat/completions",
-            headers=headers(),
-            timeout=cfg.get("timeout_s", 60),
-            json={
-                "model": cfg["perturb_generator"]["model"],
-                "temperature": 0,
-                "max_tokens": 1200,
-                "messages": [{"role": "user", "content": prompt}],
-            },
-        )
-        r.raise_for_status()
-        rec = {"response": r.json()}
+        gen = Adapter("_generator", {"kind": "llm", "model": model})
+        body = {"model": model, "temperature": 0, "max_tokens": 1200, "messages": [{"role": "user", "content": prompt}]}
+
+        async def post() -> dict:
+            async with httpx.AsyncClient(timeout=cfg.get("timeout_s", 60)) as client:
+                return await gen.call(client, body, headers(gen.spec))
+
+        try:
+            rec = {"response": asyncio.run(post())["response"]}
+        except DailyLimitError as e:
+            raise SystemExit(f"generator {model} hit its daily request limit; re-run tomorrow ({e})") from None
         put("_generator", task, k, rec)
     new = rec["response"]["choices"][0]["message"]["content"].strip()
     return {**text, "passage": new} if task == "noul" else new

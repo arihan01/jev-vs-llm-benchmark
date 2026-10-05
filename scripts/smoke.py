@@ -9,23 +9,26 @@ from pathlib import Path
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from bench.adapters import make
 from bench.build_experiments import load_experiments
-from bench.config import engines, headers
+from bench.config import DEFAULT_KEY_ENV, config_path, engines, headers, use_config
+from bench.runner import make
 
 
 async def main() -> int:
+    use_config(sys.argv[1] if len(sys.argv) > 1 else None)
+    print(f"config: {config_path().name}")
     failures = 0
     exps = load_experiments()
     async with httpx.AsyncClient(timeout=60) as client:
         for name, spec in engines().items():
             adapter = make(name, spec)
+            print(f"\n## {name}: {adapter.url} (key: ${spec.get('api_key_env', DEFAULT_KEY_ENV)})")
             for exp, e in exps.items():
                 s = e["samples"][0]
                 q = s["questions"][0]
                 print(f"\n=== {name} ({adapter.model}) / {exp}{s['id']}{q['id']} / gold={q['gold']} ===")
                 try:
-                    rec = await adapter.call(client, adapter.build_request(q, s["text"]), headers())
+                    rec = await adapter.call(client, adapter.build_request(q, s["text"]), headers(spec))
                 except Exception as ex:
                     print(f"  FAILED: {ex}")
                     failures += 1

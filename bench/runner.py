@@ -6,10 +6,12 @@ from dataclasses import dataclass
 import httpx
 import pandas as pd
 
-from . import cache
-from .adapters import Prediction, make
+from . import cache, config
+from .adapters.base import Adapter, DailyLimitError, Prediction, RateLimiter
+from .adapters.jev import JevAdapter
+from .adapters.llm import LLMAdapter
 from .build_experiments import todo_report
-from .config import RESULTS, engines, headers, load
+from .config import engines, headers, load
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +27,7 @@ COLUMNS = [
     "gold",
     "injection_target",
     "n_options",
+    "structured_output",
     "label",
     "value",
     "probs",
@@ -81,27 +84,62 @@ def check_ready(exps: dict) -> None:
         )
 
 
-async def _one(adapter, client, hdrs, job: Job, sem: asyncio.Semaphore) -> dict:
+@dataclass
+class Lane:
+    """Per-engine call settings: its own key, concurrency and rate limit, and a
+    stop flag set when the provider reports an exhausted daily quota."""
+
+    adapter: Adapter
+    headers: dict
+    sem: asyncio.Semaphore
+    limiter: RateLimiter | None = None
+    stopped: str | None = None
+
+
+def _failure(status: int, error: str, deferred: bool = False) -> dict:
+    return {
+        "response": None,
+        "latency_ms": 0.0,
+        "status": status,
+        "retries_429": 0,
+        "error": error[:500],
+        "deferred": deferred,
+    }
+
+
+async def _call(lane: Lane, client: httpx.AsyncClient, body: dict) -> dict:
+    async with lane.sem:
+        if lane.stopped:
+            return _failure(429, lane.stopped, deferred=True)
+        try:
+            return await lane.adapter.call(client, body, lane.headers, lane.limiter)
+        except DailyLimitError as e:
+            if not lane.stopped:
+                lane.stopped = f"daily request limit reached for {lane.adapter.model}; re-run tomorrow ({e})"
+                log.warning("  %s: %s", lane.adapter.name, lane.stopped)
+            return _failure(429, lane.stopped, deferred=True)
+        except Exception as e:
+            return _failure(getattr(e, "status", -1), str(e))
+
+
+async def _one(lane: Lane, client: httpx.AsyncClient, job: Job) -> dict | None:
+    """One row for raw.parquet, or None for a job deferred by a daily cap: it was
+    never attempted, so recording it would count as a failure."""
+    adapter = lane.adapter
     s, q = job.sample, job.question
     k = cache.key(adapter.name, job.exp, s["id"], q["id"], job.repeat)
-    rec = cache.get(adapter.name, job.exp, k)
+    rec = cache.get(adapter.cache_id, job.exp, k)
     cached = rec is not None
     log.debug("%s %s", "cache hit " if cached else "calling  ", k)
     if rec is None:
         body = adapter.build_request(q, s["text"], temperature=0.0)
-        async with sem:
-            try:
-                rec = await adapter.call(client, body, hdrs)
-            except Exception as e:
-                rec = {
-                    "response": None,
-                    "latency_ms": 0.0,
-                    "status": getattr(e, "status", -1),
-                    "retries_429": 0,
-                    "error": str(e)[:500],
-                }
+        rec = await _call(lane, client, body)
+        if rec.get("deferred"):
+            return None
+        rec = {"request": body, **rec}
         if rec["response"] is not None:
-            cache.put(adapter.name, job.exp, k, {"request": body, **rec})
+            cache.put(adapter.cache_id, job.exp, k, rec)
+    structured = isinstance(adapter, JevAdapter) or "response_format" in (rec.get("request") or {})
     p = (
         adapter.parse(q, rec["response"])
         if rec["response"] is not None
@@ -119,6 +157,7 @@ async def _one(adapter, client, hdrs, job: Job, sem: asyncio.Semaphore) -> dict:
         "gold": q["gold"],
         "injection_target": s.get("injection_target") if q["id"] == "Q1" else None,
         "n_options": len(q["options"]),
+        "structured_output": structured,
         "label": p.label,
         "value": p.value,
         "probs": json.dumps(p.probs),
@@ -136,22 +175,43 @@ async def _one(adapter, client, hdrs, job: Job, sem: asyncio.Semaphore) -> dict:
     }
 
 
+def _needs_call(adapter: Adapter, job: Job) -> bool:
+    k = cache.key(adapter.name, job.exp, job.sample["id"], job.question["id"], job.repeat)
+    return cache.get(adapter.cache_id, job.exp, k) is None
+
+
+def make(name: str, spec: dict) -> Adapter:
+    cls = JevAdapter if spec["kind"] == "jev" else LLMAdapter
+    return cls(name, spec)
+
+
+def lanes(jobs: list[Job]) -> dict[str, Lane]:
+    """Resolves keys up front, and only for engines that will make a live call,
+    so a cache-only re-run needs no key and a missing key fails before any call."""
+    cfg = load()
+    out = {}
+    for name, spec in engines().items():
+        adapter = make(name, spec)
+        live = any(j.engine == name and _needs_call(adapter, j) for j in jobs)
+        rpm = spec.get("rpm")
+        out[name] = Lane(
+            adapter=adapter,
+            headers=headers(spec) if live else {},
+            sem=asyncio.Semaphore(spec.get("concurrency", cfg.get("concurrency", 5))),
+            limiter=RateLimiter(rpm) if rpm else None,
+        )
+    return out
+
+
 async def execute(jobs: list[Job]) -> list[dict]:
     cfg = load()
-    adapters = {name: make(name, spec) for name, spec in engines().items()}
-    sem = asyncio.Semaphore(cfg.get("concurrency", 5))
-    hdrs = headers() if any(_needs_call(adapters[j.engine], j) for j in jobs) else {}
+    by_engine = lanes(jobs)
     async with httpx.AsyncClient(timeout=cfg.get("timeout_s", 60)) as client:
-        return list(await asyncio.gather(*(_one(adapters[j.engine], client, hdrs, j, sem) for j in jobs)))
-
-
-def _needs_call(adapter, job: Job) -> bool:
-    return (
-        cache.get(
-            adapter.name, job.exp, cache.key(adapter.name, job.exp, job.sample["id"], job.question["id"], job.repeat)
-        )
-        is None
-    )
+        rows = await asyncio.gather(*(_one(by_engine[j.engine], client, j) for j in jobs))
+    deferred = sum(r is None for r in rows)
+    if deferred:
+        log.warning("  %d job(s) deferred by a daily limit and not recorded; re-run tomorrow to finish", deferred)
+    return [r for r in rows if r is not None]
 
 
 def run(jobs: list[Job]) -> pd.DataFrame:
@@ -173,8 +233,8 @@ def run(jobs: list[Job]) -> pd.DataFrame:
 def save(new: pd.DataFrame) -> pd.DataFrame:
     """Rows for the same (exp, sample, question, engine, repeat) replace older ones,
     so partial re-runs (--exp, --engine ...) merge into one table."""
-    out = RESULTS / "raw.parquet"
-    RESULTS.mkdir(exist_ok=True)
+    out = config.results_dir() / "raw.parquet"
+    out.parent.mkdir(parents=True, exist_ok=True)
     keys = ["exp", "sample", "question", "engine", "repeat"]
     if out.exists():
         old = pd.read_parquet(out)

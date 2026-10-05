@@ -34,15 +34,60 @@ make setup               # .venv + package + dev tools (Python 3.11+)
 cp .env.example .env     # add OPENROUTER_API_KEY, the only key needed
 make experiments-llm     # fill the three S2 paraphrases
 # edit data/experiments.json: write Q2 + gold for all 15 samples (see below)
-make validate            # schema + readiness check
+make validate            # readiness check
 make dry                 # 270 jobs + cost estimate, no calls
 make smoke               # 9 live calls (each engine × experiment on S1Q1)
 make bench               # 270 calls, then the report
 make dashboard
 ```
 
-`make help` lists every target. The CLI is also installed as `jev-bench` (same flags as
+`make help` lists every target. Any target accepts `CONFIG=<file>` to use another config (see
+[Free trial](#free-trial)). The CLI is also installed as `jev-bench` (same flags as
 `python -m bench.run`), e.g. `jev-bench --exp E1 --engine jev --sample S1 --repeats 1 -v`.
+
+## Free trial
+
+[`config.free.yaml`](config.free.yaml) swaps the engines so you can run the grid without buying
+OpenRouter credits. The default `config.yaml` is unchanged.
+
+```bash
+make smoke CONFIG=config.free.yaml
+make bench CONFIG=config.free.yaml       # or: BENCH_CONFIG=config.free.yaml jev-bench --all
+```
+
+| Engine | Model | Route | Key |
+|---|---|---|---|
+| `jev` | `jev-1.13.0` | TypeSafe direct (`api.typesafe.ai/v1/systemone`); OpenRouter has no free Jev | `TYPESAFE_API_KEY` |
+| `low` | `qwen/qwen3.8-27b:free` | OpenRouter, JSON schema on | `OPENROUTER_API_KEY` |
+| `high` | `nvidia/nemotron-3-ultra-550b-a55b:free` | OpenRouter, no `response_format` (unsupported); the answer is parsed from plain text | `OPENROUTER_API_KEY` |
+
+- **Daily cap.** OpenRouter allows 20 requests/min and **50/day per account** on `:free` models
+  (1,000/day after a one-time $10 purchase). The two free engines need 180 calls, so run `make bench`
+  once a day for about 4 days. `make dry CONFIG=config.free.yaml` shows how many calls remain. When the
+  cap is hit, that engine's remaining jobs stop with a "re-run tomorrow" message. Those deferred jobs
+  are not retried, cached or saved, so they never count as failures. Until the grid is complete,
+  `verdict.md` opens with an "Incomplete: N/270 calls done" banner.
+- **Reasoning models.** Free reasoning models such as Nemotron Ultra need `reasoning: off`; otherwise
+  they spend `max_tokens` thinking and return empty content, and every answer is invalid. `high` sets
+  `reasoning: off` and `max_tokens: 400`.
+- **Schema fallback.** If a model rejects `response_format` with a 400, the call is resent once without
+  it, and the answer is parsed from the text. The `structured_output` column in `raw.parquet` records
+  which calls used the schema.
+- **Rate limit.** `rpm: 20` and `concurrency: 1` keep the free engines under the per-minute limit.
+  Retries wait their turn too. Other engines keep their own settings.
+- **Cost.** TypeSafe's response reports tokens but not cost, so cost is computed as tokens × the
+  engine's `price_in` / `price_out`. 90 Jev calls is well under $0.01, and may be covered by a TypeSafe
+  sign-up credit if one is offered.
+- **Kept separate.** Results go to `results/free/`, and the cache is keyed by engine *and* model, so a
+  free run never mixes with a `config.yaml` run.
+- `high` is a large open model, not a commercial frontier model. The paraphrase generator is also a
+  `:free` model and uses 3 of the daily calls.
+- Free model ids change often. Confirm them at openrouter.ai/models before running. A schema-capable
+  fallback for `high` is `nvidia/nemotron-3-super-120b-a12b:free`.
+
+Per-engine settings (any config): `base_url`, `api_key_env`, `structured_output`, `reasoning`,
+`max_tokens`, `concurrency`, `rpm`, `price_in`, `price_out`. OpenRouter-only request fields (`usage`, `reasoning`) are sent only to
+OpenRouter.
 
 ## Writing Q2
 
@@ -57,7 +102,6 @@ Each sample's second question sits next to Q1 in `data/experiments.json`:
 - Noul options are exactly `yes` / `no`. Score options are keyed `0..n-1` in increasing order (2–10 levels).
 - `gold` is one of the option keys. Write the Q2s before you see any engine output.
 
-The file's structure is defined by [`data/experiments.schema.json`](data/experiments.schema.json).
 `make bench` refuses to start while any gold is `null`, any `TODO` text remains, or a paraphrase is still
 pending. `make experiments` never overwrites the file; `make experiments FORCE=1` rebuilds it and throws
 away the Q2s.
@@ -89,14 +133,15 @@ Return {"label": <one option key>, "confidence": <0-1>}.
 
 | File | Contents |
 |---|---|
-| `results/raw.parquet` | one row per call: exp, sample, question, perturbation, engine, repeat, gold, label, value, probs, confidence, correct, valid, latency, tokens, cost |
+| `results/raw.parquet` | one row per attempted call: exp, sample, question, perturbation, engine, repeat, gold, label, value, probs, confidence, correct, valid, structured_output, latency, tokens, cost, status, error |
 | `results/cells.csv` | one row per `EiSjQp × engine`: the 3 answers, majority-correct, consistent, mean latency / tokens / cost, P(gold) mean and std, MAE or Brier |
-| `results/scorecard.csv` | experiment × engine: accuracy, consistency, invalid and error rate, p50/p95 latency, total tokens and cost, cost per 100 questions, Noul AUROC / Brier, Score MAE, injection success |
+| `results/scorecard.csv` | experiment × engine: expected / attempted / answered / deferred calls, accuracy, consistency, invalid and error rate, p50/p95 latency, total tokens and cost, cost per 100 questions, Noul AUROC / Brier, Score MAE, injection success |
 | `results/verdict.md` | per primitive: which engine, latency, tokens, cost, error rate, caveats |
+| `results/report.md` | `make export`: the write-up in six sections: the experiment, what is measured, the inputs with examples and their T, the run report (headline numbers, ✓/✗ grid, what stands out, speed, tokens, accuracy by change), source excerpts of the core code, and observations. Cost columns are omitted when any engine is free-tier. Observations are stage 2: write `observations.md` next to the report (by hand or in an LLM session) and re-export to include it. Aggregates only, no charts |
+| `results/report.pdf` | `make export PDF=1`: the same report as a landscape PDF with wrapped tables; needs `pip install -e '.[pdf]'` (WeasyPrint; on macOS also `brew install pango`) |
 
 The dashboard shows a correctness grid per experiment (engines × `S1Q1…S5Q2`, one ✓/✗ per repeat), a
-latency box plot, tokens and cost, consistency, and accuracy by perturbation. For static PNGs:
-`pip install -e '.[static]' && python dashboard/figures.py`.
+latency box plot, tokens and cost, consistency, and accuracy by perturbation.
 
 `results/` is gitignored apart from `.gitkeep`. To commit a snapshot for a demo, add it with
 `git add -f results/...`.
@@ -122,11 +167,11 @@ Contribution notes: [CONTRIBUTING.md](CONTRIBUTING.md). Changes: [CHANGELOG.md](
 
 ```
 bench/
-  config.py            config.yaml + .env + logging setup
+  config.py            config selection (--config / BENCH_CONFIG), per-engine URL + key, logging
   data.py              sample + freeze data/{task}.jsonl (300 per task, seed 42)
   prompts.py           question rendering for Jev and the LLM template
   perturb.py           typo / padding / distractor / injection / paraphrase
-  build_experiments.py data/experiments.json builder, schema + readiness checks
+  build_experiments.py data/experiments.json builder + readiness checks
   adapters/            base.py (HTTP, retries, timing), jev.py (Decisions API), llm.py (chat + JSON schema)
   cache.py runner.py   cached async calls -> results/raw.parquet
   metrics.py report.py cells, scorecard, verdict
@@ -152,6 +197,9 @@ tests/                 offline unit + pipeline tests
 | Symptom | Fix |
 |---|---|
 | `OPENROUTER_API_KEY is not set` | `cp .env.example .env` and add the key from openrouter.ai/settings/keys |
+| `TYPESAFE_API_KEY is not set` | only needed for `config.free.yaml`; get it at console.typesafe.ai/settings/keys |
+| `daily request limit reached … re-run tomorrow` | the `:free` cap is used up; re-run tomorrow, and finished calls stay cached |
+| every `high` row says `empty content (finish_reason=length …)` | a reasoning model is thinking; set `reasoning: off` (and raise `max_tokens`) for that engine |
 | `data/experiments.json is not ready` | run `make validate` and fix each listed item; usually Q2s or `make experiments-llm` |
 | many 429s / slow runs | lower `concurrency` in `config.yaml`; retries back off automatically and are counted in `retries_429` |
 | Jev rows all invalid with `no answer in response` | the alpha API's response shape changed; run `make smoke`, inspect the raw JSON, adjust `find_answer` in `bench/adapters/jev.py` |
@@ -160,6 +208,9 @@ tests/                 offline unit + pipeline tests
 
 ## Caveats
 
+- Quality metrics (accuracy, consistency, invalid rate, latency) use only calls that got an HTTP 200.
+  Transport and provider errors are reported as `error_rate`. An unparseable or out-of-set answer is
+  still a 200 and counts as wrong.
 - LLM confidence is self-reported, not a probability; Jev's is a probability. Read calibration numbers
   with that in mind.
 - Jev's run-to-run variance shows up in the `consistent` column and is reported, not hidden.

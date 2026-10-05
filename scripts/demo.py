@@ -10,8 +10,8 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bench.adapters.jev import find_answer
-from bench.adapters.llm import LLMAdapter, parse_content
-from bench.config import RESULTS, headers, load
+from bench.adapters.llm import LLMAdapter
+from bench.config import engine_url, headers, load, results_dir
 
 MESSAGE = (
     "I was charged twice for the same coffee this morning and the app still shows both payments. "
@@ -45,19 +45,17 @@ QUESTIONS = {
 }
 
 
-def llm_prompt(q: dict) -> tuple[str, list[str]]:
+def as_question(q: dict) -> dict:
+    """Jev's `criteria` in the benchmark's `options` form, so the LLM side goes
+    through the same adapter code as `make bench`."""
     crit = q["criteria"]
     if q["type"] == "score":
-        opts = [(str(i), d) for i, d in enumerate(crit)]
+        options = {str(i): d for i, d in enumerate(crit)}
     elif q["type"] == "noul":
-        opts = [("yes", crit["true"]), ("no", crit["false"])]
+        options = {"yes": crit["true"], "no": crit["false"]}
     else:
-        opts = list(crit.items())
-    lines = "\n".join(f"{k}: {d}" for k, d in opts)
-    return (
-        f"{q['instructions']}\nOptions:\n{lines}\nInput:\n{MESSAGE}\n"
-        'Return {"label": <one option key>, "confidence": <0-1>}.'
-    ), [k for k, _ in opts]
+        options = dict(crit)
+    return {"type": q["type"], "instructions": q["instructions"], "options": options}
 
 
 async def main():
@@ -66,9 +64,10 @@ async def main():
     async with httpx.AsyncClient(timeout=60) as client:
         print(f"Input: {MESSAGE}\n")
         t0 = time.perf_counter()
+        jev = cfg["engines"]["jev"]
         r = await client.post(
-            cfg["jev_decisions_url"],
-            headers=headers(),
+            engine_url(jev),
+            headers=headers(jev),
             json={"model": cfg["engines"]["jev"]["model"], "state": MESSAGE, "questions": QUESTIONS},
         )
         r.raise_for_status()
@@ -85,35 +84,13 @@ async def main():
 
         print(f"\nLLM ({llm.model}): three requests")
         for name, q in QUESTIONS.items():
-            user, keys = llm_prompt(q)
-            body = {
-                "model": llm.model,
-                "temperature": 0,
-                "max_tokens": 200,
-                "usage": {"include": True},
-                "messages": [
-                    {"role": "system", "content": "You are a classifier. Reply only with JSON matching the schema."},
-                    {"role": "user", "content": user},
-                ],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "c",
-                        "strict": True,
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": ["label", "confidence"],
-                            "properties": {"label": {"type": "string", "enum": keys}, "confidence": {"type": "number"}},
-                        },
-                    },
-                },
-            }
-            rec = await llm.call(client, body, headers())
-            out = parse_content(rec["response"]["choices"][0]["message"]["content"])
+            question = as_question(q)
+            rec = await llm.call(client, llm.build_request(question, MESSAGE), headers(llm.spec))
+            p = llm.parse(question, rec["response"])
+            out = {"label": p.label, "confidence": p.confidence} if p.valid else {"error": p.error}
             print(f"  {name:<12} {out}  ({rec['latency_ms']:.0f} ms)")
 
-    sc = RESULTS / "scorecard.csv"
+    sc = results_dir() / "scorecard.csv"
     if sc.exists():
         import pandas as pd
 

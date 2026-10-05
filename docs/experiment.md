@@ -56,7 +56,6 @@ flowchart LR
 
 1. Write the transformation in `bench/perturb.py`. It must keep the gold answer unchanged and be
    deterministic given the `random.Random` it receives.
-2. Add a branch for it in `bench/build_experiments.py::build_sample`, add its name to the `perturbation`
-   enum in `data/experiments.schema.json`, and use it in `sample_perturbations` in `config.yaml`.
+2. Add a branch for it in `bench/build_experiments.py::build_sample`, and use it in `sample_perturbations` in `config.yaml`.
 3. Rebuild with `make experiments FORCE=1`. This throws away the hand-written Q2s, so copy them out
    first.

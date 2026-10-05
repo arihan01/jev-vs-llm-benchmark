@@ -5,7 +5,7 @@ import random
 
 import pytest
 
-from bench import build_experiments, cache, report, runner
+from bench import build_experiments, cache, config, runner
 from bench.adapters.base import Adapter
 
 
@@ -62,14 +62,21 @@ def sandbox(tmp_path, monkeypatch):
     """Cache and results in tmp_path, Adapter.call replaced by the fake gateway.
     Returns (tmp_path, calls) where calls["n"] counts gateway hits."""
     monkeypatch.setattr(cache, "CACHE", tmp_path / "cache")
-    for mod in (runner, report):
-        monkeypatch.setattr(mod, "RESULTS", tmp_path / "results")
-    monkeypatch.setattr(runner, "headers", lambda: {})
+    monkeypatch.setattr(config, "results_dir", lambda: tmp_path / "results")
+    monkeypatch.setattr(runner, "headers", lambda spec=None: {})
     calls = {"n": 0}
 
-    async def fake_call(self, client, body, headers):
+    async def fake_call(self, client, body, headers, limiter=None):
         calls["n"] += 1
         return {"response": fake_response(body), "latency_ms": 100.0 + calls["n"] % 7, "status": 200, "retries_429": 0}
 
     monkeypatch.setattr(Adapter, "call", fake_call)
     return tmp_path, calls
+
+
+@pytest.fixture
+def free_config():
+    """Switches the process to config.free.yaml for one test."""
+    config.use_config(config.ROOT / "config.free.yaml")
+    yield config.load()
+    config.use_config(None)

@@ -7,7 +7,6 @@ repos:
       - id: check-yaml
       - id: check-json
       - id: check-added-large-files
-        exclude: ^results/.*\.parquet$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.10
     hooks:

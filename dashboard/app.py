@@ -10,7 +10,7 @@ st.set_page_config(page_title="Jev vs LLM Benchmark", layout="wide")
 st.title("Jev vs LLM Benchmark")
 st.caption("3 experiments × 5 perturbed samples × 2 questions × 3 engines × 3 repeats")
 
-if not (figures.RESULTS / "scorecard.csv").exists():
+if not (figures.results_dir() / "scorecard.csv").exists():
     st.warning("No results yet. Run `make bench`, then reload.")
     st.stop()
 
@@ -27,7 +27,7 @@ st.plotly_chart(figures.accuracy_by_perturbation(raw), use_container_width=True)
 st.subheader("Scorecard")
 st.dataframe(sc, use_container_width=True, hide_index=True)
 
-verdict = figures.RESULTS / "verdict.md"
+verdict = figures.results_dir() / "verdict.md"
 if verdict.exists():
     with st.expander("Verdict", expanded=True):
         st.markdown(verdict.read_text())

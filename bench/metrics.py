@@ -22,11 +22,6 @@ def p_of(df: pd.DataFrame, labels) -> np.ndarray:
     return np.array([json.loads(p).get(lab, 0.0) if p else 0.0 for p, lab in zip(df["probs"], labels, strict=True)])
 
 
-def percentile(x, q) -> float:
-    x = np.asarray(x, float)
-    return float(np.percentile(x, q)) if len(x) else float("nan")
-
-
 def safe_auroc(y_true, score) -> float:
     y = np.asarray(y_true, int)
     return float(roc_auc_score(y, score)) if len(set(y)) == 2 else float("nan")
@@ -81,47 +76,58 @@ def cell_metrics(g: pd.DataFrame) -> dict:
     return out
 
 
+def answered(raw: pd.DataFrame) -> pd.DataFrame:
+    """Calls that got an HTTP 200. Quality metrics use only these; transport and
+    provider errors are reported separately as error_rate. An unparseable or
+    out-of-set answer is still a 200 and still counts as wrong."""
+    return raw[raw["status"] == 200]
+
+
 def cells(raw: pd.DataFrame) -> pd.DataFrame:
-    rows = [{**dict(zip(CELL, k, strict=True)), **cell_metrics(g)} for k, g in raw.groupby(CELL, sort=True)]
-    return pd.DataFrame(rows)
+    ok = answered(raw)
+    rows = [{**dict(zip(CELL, k, strict=True)), **cell_metrics(g)} for k, g in ok.groupby(CELL, sort=True)]
+    return pd.DataFrame(rows, columns=None if rows else CELL)
 
 
 def aggregate(raw: pd.DataFrame) -> pd.DataFrame:
     """One row per experiment × engine."""
     cl = cells(raw)
+    nan = float("nan")
     rows = []
-    for (exp, engine), g in raw.groupby(["exp", "engine"], sort=True):
-        c = cl[(cl.exp == exp) & (cl.engine == engine)]
-        typ = g["type"].iloc[0]
-        ok = g[g["status"] == 200]
+    for (exp, engine), attempted in raw.groupby(["exp", "engine"], sort=True):
+        g = answered(attempted)
+        c = cl[(cl.exp == exp) & (cl.engine == engine)] if len(cl) else cl
+        typ = attempted["type"].iloc[0]
+        has = len(g) > 0
         rec = {
             "exp": exp,
             "type": typ,
             "engine": engine,
-            "model": g["model"].iloc[0],
+            "model": attempted["model"].iloc[0],
             "questions": len(c),
-            "calls": len(g),
-            "accuracy": float(correct(g).mean()),
-            "majority_accuracy": float(c["correct_majority"].mean()),
-            "consistency": float(c["consistent"].mean()),
-            "invalid_rate": float(1 - g["valid"].astype(bool).mean()),
-            "error_rate": float((g["status"] != 200).mean()),
-            "mean_latency_ms": float(ok["latency_ms"].mean()) if len(ok) else float("nan"),
-            "p50_latency_ms": percentile(ok["latency_ms"], 50),
-            "p95_latency_ms": percentile(ok["latency_ms"], 95),
-            "tokens_in": int(g["tokens_in"].sum()),
-            "tokens_out": int(g["tokens_out"].sum()),
-            "total_cost": float(g["cost"].sum()),
-            "cost_per_100_questions": float(g["cost"].mean() * 100),
-            "mean_p_gold": float(p_of(g, g["gold"]).mean()),
+            "attempted": len(attempted),
+            "answered": len(g),
+            "error_rate": float((attempted["status"] != 200).mean()),
+            "accuracy": float(correct(g).mean()) if has else nan,
+            "majority_accuracy": float(c["correct_majority"].mean()) if has else nan,
+            "consistency": float(c["consistent"].mean()) if has else nan,
+            "invalid_rate": float(1 - g["valid"].astype(bool).mean()) if has else nan,
+            "mean_latency_ms": float(g["latency_ms"].mean()) if has else nan,
+            "p50_latency_ms": float(g["latency_ms"].quantile(0.5)),
+            "p95_latency_ms": float(g["latency_ms"].quantile(0.95)),
+            "tokens_in": int(attempted["tokens_in"].sum()),
+            "tokens_out": int(attempted["tokens_out"].sum()),
+            "total_cost": float(attempted["cost"].sum()),
+            "cost_per_100_questions": float(g["cost"].mean() * 100) if has else nan,
+            "mean_p_gold": float(p_of(g, g["gold"]).mean()) if has else nan,
             "ece": ece(conf(g), correct(g)),
         }
         if typ == "noul":
             gold = (g["gold"] == "yes").astype(int).to_numpy()
-            rec["auroc"] = safe_auroc(gold, p_yes(g))
-            rec["brier"] = float(((p_yes(g) - gold) ** 2).mean())
+            rec["auroc"] = safe_auroc(gold, p_yes(g)) if has else nan
+            rec["brier"] = float(((p_yes(g) - gold) ** 2).mean()) if has else nan
         if typ == "score":
-            rec["mae"] = float(abs_err(g).mean())
+            rec["mae"] = float(abs_err(g).mean()) if has else nan
         q1 = g[g["question"] == "Q1"]
         inj = q1[q1["injection_target"].notna()]
         if len(inj):
@@ -133,8 +139,9 @@ def aggregate(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def accuracy_by_perturbation(raw: pd.DataFrame) -> pd.DataFrame:
+    ok = answered(raw)
     return (
-        raw.assign(correct=correct(raw))
+        ok.assign(correct=correct(ok))
         .groupby(["engine", "perturbation"])["correct"]
         .mean()
         .rename("accuracy")

@@ -41,3 +41,18 @@ def test_all_runs_then_reports(monkeypatch):
     monkeypatch.setattr(run.report, "main", lambda: order.append("report"))
     run.main(["--all", "-v"])
     assert order == ["check", ("run", 270), "report"]
+
+
+def test_dry_with_free_config_reports_days(capsys):
+    try:
+        run.main(["--dry", "--config", "config.free.yaml"])
+    finally:
+        run.use_config(None)
+    out = capsys.readouterr().out
+    assert "config: config.free.yaml" in out
+    assert "free tier: 180 uncached call(s) on :free models (high, low); at 50/day that is 4 day(s)" in out
+
+
+def test_dry_with_default_config_has_no_free_line(capsys):
+    run.main(["--dry"])
+    assert "free tier" not in capsys.readouterr().out

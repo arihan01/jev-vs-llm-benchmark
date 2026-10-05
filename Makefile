@@ -1,8 +1,13 @@
 PY ?= .venv/bin/python
 BIN = $(dir $(PY))
 
+# CONFIG=config.free.yaml switches every target to the free-trial engines
+ifdef CONFIG
+export BENCH_CONFIG := $(CONFIG)
+endif
+
 .DEFAULT_GOAL := help
-.PHONY: help setup data experiments experiments-llm validate smoke dry bench report dashboard diagram demo \
+.PHONY: help setup data experiments experiments-llm validate smoke dry bench report export dashboard diagram demo \
         test lint fmt typecheck check precommit-install clean-results
 
 help:              ## list targets
@@ -21,7 +26,7 @@ experiments:       ## build data/experiments.json (refuses to overwrite; FORCE=1
 experiments-llm:   ## fill the pending S2 paraphrases via the generator model
 	$(PY) -m bench.build_experiments --llm
 
-validate:          ## check data/experiments.json against its JSON Schema and readiness rules
+validate:          ## check data/experiments.json against its readiness rules
 	$(PY) -m bench.build_experiments --validate
 
 smoke:             ## one live call per engine per experiment (S1Q1)
@@ -35,6 +40,9 @@ bench:             ## all 270 calls, then the report
 
 report:            ## rebuild cells / scorecard / verdict from results/raw.parquet
 	$(PY) -m bench.report
+
+export:            ## results as report.md; PDF=1 also writes report.pdf (needs: pip install -e '.[pdf]')
+	$(PY) -m bench.export_md $(if $(PDF),--pdf,)
 
 dashboard:         ## streamlit dashboard over results/
 	$(PY) -m streamlit run dashboard/app.py

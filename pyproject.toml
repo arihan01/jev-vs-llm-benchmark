@@ -29,7 +29,6 @@ dependencies = [
   "streamlit>=1.38",
   "plotly>=5.22",
   "python-dotenv>=1.0",
-  "jsonschema>=4.21",
 ]
 
 [project.optional-dependencies]
@@ -42,9 +41,8 @@ dev = [
   "mypy>=1.11",
   "pre-commit>=3.7",
   "types-PyYAML",
-  "types-jsonschema",
 ]
-static = ["kaleido>=0.2"]
+pdf = ["markdown>=3.6", "weasyprint>=62"]  # WeasyPrint needs Pango (macOS: brew install pango)
 
 [project.urls]
 "OpenRouter Jev docs" = "https://openrouter.ai/docs/guides/community/jev"

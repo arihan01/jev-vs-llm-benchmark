@@ -2,6 +2,7 @@ import pytest
 
 from bench import prompts
 from bench.adapters.jev import JevAdapter, find_answer
+from bench.adapters.llm import LLMAdapter
 
 JEV = JevAdapter("jev", {"kind": "jev", "model": "typesafe/jev-1.13"})
 Q_SCORE = {"id": "Q2", "type": "score", "instructions": "i", "options": {"0": "a", "1": "b", "2": "c"}, "gold": "2"}
@@ -23,8 +24,11 @@ def test_find_answer_locates_nested_shapes(envelope):
     assert found is not None and found["noul"] == 0.8
 
 
-def test_find_answer_ignores_non_answer_dicts():
-    assert find_answer({"Q1": {"no_type": True}}, "Q1") is None
+def test_find_answer_type_optional_only_at_known_positions():
+    bare = {"choice": "a", "probabilities": {"a": 1.0}}
+    assert find_answer({"Q1": bare}, "Q1") is bare
+    assert find_answer({"answers": {"Q1": bare}}, "Q1") is bare
+    assert find_answer({"data": {"Q1": bare}}, "Q1") is None
     assert find_answer({"Q2": ANSWER}, "Q1") is None
 
 
@@ -76,3 +80,46 @@ def test_choice_outside_options_is_invalid():
 def test_malformed_answer_is_invalid():
     p = JEV.parse(Q_SCORE, {"Q2": {"type": "score", "score": "high"}})
     assert not p.valid and p.error.startswith("malformed answer")
+
+
+TYPESAFE = JevAdapter(
+    "jev",
+    {
+        "kind": "jev",
+        "model": "jev-1.13.0",
+        "base_url": "https://api.typesafe.ai/v1/systemone",
+        "api_key_env": "TYPESAFE_API_KEY",
+        "price_in": 0.042,
+        "price_out": 0,
+    },
+)
+
+
+def test_typesafe_direct_url_and_identical_body():
+    assert TYPESAFE.url == "https://api.typesafe.ai/v1/systemone"
+    q = prompts.q1("noul", "yes")
+    assert {k: v for k, v in TYPESAFE.build_request(q, "s").items() if k != "model"} == {
+        k: v for k, v in JEV.build_request(q, "s").items() if k != "model"
+    }
+
+
+def test_typesafe_response_shape_with_cost_fallback():
+    response = {
+        "answers": {"Q1": {"type": "noul", "noul": 0.71}},
+        "usage": {"input_tokens": 400, "output_tokens": 0},
+    }
+    p = TYPESAFE.parse(prompts.q1("noul", "yes"), response)
+    assert p.valid and p.label == "yes" and (p.tokens_in, p.tokens_out) == (400, 0)
+    assert p.cost == pytest.approx(400 * 0.042 / 1e6)
+
+
+def test_cache_id_separates_models_under_one_engine_name():
+    assert TYPESAFE.cache_id == "jev/jev-1.13.0"
+    assert JEV.cache_id == "jev/typesafe_jev-1.13"
+    assert LLMAdapter("low", {"kind": "llm", "model": "qwen/qwen3.8-27b:free"}).cache_id == "low/qwen_qwen3.8-27b_free"
+
+
+def test_typesafe_envelope_without_type_parses():
+    q = {"id": "Q1", "type": "choice", "instructions": "i", "options": {"a": "A", "b": "B"}, "gold": "a"}
+    p = TYPESAFE.parse(q, {"answers": {"Q1": {"choice": "b", "probabilities": {"a": 0.3, "b": 0.7}}}})
+    assert p.valid and p.label == "b" and p.confidence == 0.7

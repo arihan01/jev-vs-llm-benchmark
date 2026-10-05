@@ -72,3 +72,19 @@ def test_aggregate_tokens_cost_and_injection():
 
 def test_ece_known_value():
     assert metrics.ece([0.9, 0.9], [1, 0]) == pytest.approx(0.4)
+
+
+def test_quality_metrics_ignore_failed_calls_but_error_rate_counts_them():
+    ok = rows(["a", "a"], "a")
+    failed = rows([None], "a").assign(status=500, repeat=[2], latency_ms=0.0)
+    agg = metrics.aggregate(pd.concat([ok, failed], ignore_index=True)).iloc[0]
+    assert agg.attempted == 3 and agg.answered == 2
+    assert agg.accuracy == 1.0 and agg.invalid_rate == 0.0 and agg.consistency == 1.0
+    assert agg.error_rate == pytest.approx(1 / 3) and agg.mean_latency_ms == 100.0
+
+
+def test_engine_with_only_failures_has_nan_quality():
+    agg = metrics.aggregate(rows([None, None], "a").assign(status=503)).iloc[0]
+    assert agg.answered == 0 and agg.error_rate == 1.0
+    assert all(pd.isna(agg[k]) for k in ("accuracy", "consistency", "invalid_rate", "cost_per_100_questions"))
+    assert metrics.cells(rows([None], "a").assign(status=503)).empty

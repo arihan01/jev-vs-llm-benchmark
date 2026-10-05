@@ -13,5 +13,7 @@ htmlcov/
 results/*.parquet
 results/*.csv
 results/verdict.md
+results/report.md
 results/figures/
 !results/.gitkeep
+results/free/

@@ -2,8 +2,8 @@ import json
 import re
 
 from .. import prompts
-from ..config import load
-from .base import Adapter, Prediction
+from ..config import is_openrouter
+from .base import Adapter, HTTPStatusError, Prediction
 
 
 def response_format(q: dict) -> dict:
@@ -43,23 +43,37 @@ def parse_content(content: str) -> dict | None:
     return obj if isinstance(obj, dict) else None
 
 
+SCHEMA_REJECTED = re.compile(r"response_format|json_schema|structured", re.I)
+
+
 class LLMAdapter(Adapter):
-    def __init__(self, name, spec):
-        super().__init__(name, spec)
-        self.url = load()["openrouter_base"].rstrip("/") + "/chat/completions"
+    async def call(self, client, body, headers, limiter=None) -> dict:
+        """Some free models reject `response_format` with a 400. Resend once
+        without it; the prompt's own "Return {...}" line still asks for JSON, and
+        the returned `request` records which body actually produced the answer."""
+        try:
+            return await super().call(client, body, headers, limiter)
+        except HTTPStatusError as e:
+            if e.status != 400 or "response_format" not in body or not SCHEMA_REJECTED.search(e.body):
+                raise
+            plain = {k: v for k, v in body.items() if k != "response_format"}
+            rec = await super().call(client, plain, headers, limiter)
+            return {**rec, "request": plain}
 
     def build_request(self, q, text, temperature=0.0):
-        body = {
+        body: dict = {
             "model": self.model,
             "messages": prompts.llm_messages(q, text),
-            "response_format": response_format(q),
-            "max_tokens": 200,
-            "usage": {"include": True},
+            "max_tokens": self.spec.get("max_tokens", 200),
         }
+        if self.spec.get("structured_output", True):
+            body["response_format"] = response_format(q)
         if temperature is not None:
             body["temperature"] = temperature
-        if self.spec.get("reasoning") is False or self.spec.get("reasoning") == "off":
-            body["reasoning"] = {"enabled": False}
+        if is_openrouter(self.spec):
+            body["usage"] = {"include": True}
+            if self.spec.get("reasoning") is False or self.spec.get("reasoning") == "off":
+                body["reasoning"] = {"enabled": False}
         return body
 
     def parse(self, q, response) -> Prediction:
@@ -68,13 +82,16 @@ class LLMAdapter(Adapter):
             label=None,
             tokens_in=int(usage.get("prompt_tokens") or 0),
             tokens_out=int(usage.get("completion_tokens") or 0),
-            cost=float(usage.get("cost") or 0.0),
-            raw=response,
         )
+        p.cost = self.cost(usage, p.tokens_in, p.tokens_out)
         try:
             content = response["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
             p.error = "no message content"
+            return p
+        if not (content or "").strip():
+            finish = response["choices"][0].get("finish_reason")
+            p.error = f"empty content (finish_reason={finish}; a reasoning model may have spent max_tokens thinking)"
             return p
         obj = parse_content(content)
         keys = prompts.option_keys(q)

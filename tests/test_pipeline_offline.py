@@ -22,6 +22,7 @@ def test_full_grid(sandbox, ready_experiments):
     runner.check_ready(ready_experiments)
     raw = runner.run(runner.build_jobs(ready_experiments))
     assert len(raw) == 270 and calls["n"] == 270
+    assert (raw.status == 200).all() and raw.error.isna().sum() > 200
     assert set(raw.groupby(["exp", "engine"]).size()) == {30}
     sc = metrics.aggregate(raw)
     assert len(sc) == 9 and len(metrics.cells(raw)) == 90
@@ -44,10 +45,10 @@ def test_failing_engine_yields_invalid_rows_and_report_still_builds(sandbox, rea
     tmp, _ = sandbox
     working = Adapter.call
 
-    async def flaky(self, client, body, headers):
+    async def flaky(self, client, body, headers, limiter=None):
         if self.name == "high":
             raise HTTPStatusError(500, "upstream exploded")
-        return await working(self, client, body, headers)
+        return await working(self, client, body, headers, limiter)
 
     monkeypatch.setattr(Adapter, "call", flaky)
     raw = runner.run(runner.build_jobs(ready_experiments, exp=["E1"], repeats=1))

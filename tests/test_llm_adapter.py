@@ -101,3 +101,42 @@ def test_non_numeric_confidence_becomes_zero():
 def test_invalid_outputs(response, error):
     p = llm().parse(Q_SCORE, response)
     assert not p.valid and p.error == error
+
+
+def test_structured_output_false_drops_response_format():
+    body = llm(structured_output=False).build_request(Q_SCORE, "t")
+    assert "response_format" not in body
+    assert 'Return {"label": <one option key>, "confidence": <0-1>}.' in body["messages"][1]["content"]
+
+
+def test_openrouter_only_fields_are_omitted_elsewhere():
+    body = llm(base_url="https://api.anthropic.com/v1", reasoning="off").build_request(Q_SCORE, "t")
+    assert "usage" not in body and "reasoning" not in body
+    assert llm(base_url="https://api.anthropic.com/v1").url == "https://api.anthropic.com/v1/chat/completions"
+
+
+def test_plain_text_answer_parses_without_schema():
+    p = llm(structured_output=False).parse(Q_SCORE, resp('I think {"label": "2", "confidence": 0.8}.'))
+    assert p.valid and p.label == "2"
+
+
+def test_cost_falls_back_to_token_prices():
+    a = llm(price_in=2, price_out=10)
+    assert a.parse(
+        Q_SCORE, resp('{"label": "1", "confidence": 1}', prompt_tokens=1000, completion_tokens=100)
+    ).cost == (pytest.approx((1000 * 2 + 100 * 10) / 1e6))
+    reported = a.parse(Q_SCORE, resp('{"label": "1", "confidence": 1}', prompt_tokens=1000, cost=0.5))
+    assert reported.cost == 0.5
+    assert llm().parse(Q_SCORE, resp('{"label": "1", "confidence": 1}', prompt_tokens=1000)).cost == 0.0
+
+
+def test_max_tokens_is_per_engine():
+    assert llm().build_request(Q_SCORE, "t")["max_tokens"] == 200
+    assert llm(max_tokens=400).build_request(Q_SCORE, "t")["max_tokens"] == 400
+
+
+def test_reasoning_model_empty_content_is_invalid_with_a_clear_error():
+    response = {"choices": [{"message": {"content": "", "reasoning": "hmm..."}, "finish_reason": "length"}]}
+    p = llm().parse(Q_SCORE, response)
+    assert not p.valid and "empty content (finish_reason=length" in p.error and "reasoning model" in p.error
+    assert "empty content" in llm().parse(Q_SCORE, {"choices": [{"message": {"content": None}}]}).error

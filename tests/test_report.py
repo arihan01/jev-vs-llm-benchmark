@@ -18,6 +18,8 @@ def row(engine, typ="choice", accuracy=0.5, cost=0.01, **extra):
         "tokens_in": 1000,
         "tokens_out": 20,
         "cost_per_100_questions": cost,
+        "total_cost": cost * 0.3,
+        "attempted": 30,
         "invalid_rate": 0.0,
         "error_rate": 0.0,
         "injection_success": float("nan"),
@@ -69,3 +71,34 @@ def test_main_writes_three_files(sandbox, ready_experiments):
 def test_missing_raw_exits(sandbox):
     with pytest.raises(SystemExit, match="make bench"):
         report.load_raw()
+
+
+def test_cost_ties_break_on_latency():
+    sc = pd.DataFrame([row("low", cost=0.0, p50_latency_ms=900.0), row("high", cost=0.0, p50_latency_ms=300.0)])
+    assert "**Use `high`" in report.verdict(sc, pd.DataFrame())
+
+
+def test_zero_cost_engines_get_a_note():
+    sc = pd.DataFrame([row("jev", cost=0.001), row("low", cost=0.0)])
+    text = report.verdict(sc, pd.DataFrame())
+    assert "`low` reported $0 cost (free tier)" in text and "`jev`" not in text.split("Note:")[1].split("\n")[0]
+
+
+def test_incomplete_banner_and_progress_columns():
+    sc = report.with_progress(
+        pd.DataFrame([row("jev"), row("low")]).assign(attempted=[30, 12]), {("E1", "jev"): 30, ("E1", "low"): 30}
+    )
+    assert list(sc.deferred) == [0, 18]
+    assert "**Incomplete:** 42/60 calls done (18 deferred" in report.verdict(sc, pd.DataFrame())
+    complete = report.with_progress(pd.DataFrame([row("jev")]), {("E1", "jev"): 30})
+    assert "Incomplete" not in report.verdict(complete, pd.DataFrame())
+
+
+def test_experiment_without_answers_is_reported():
+    sc = pd.DataFrame([row("low", accuracy=math.nan)])
+    assert "No answered calls yet." in report.verdict(sc, pd.DataFrame())
+
+
+def test_expected_calls_uses_experiments_and_config():
+    counts = report.expected_calls()
+    assert sum(counts.values()) == 270 and counts[("E1", "jev")] == 30

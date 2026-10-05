@@ -35,7 +35,3 @@ def test_every_figure_builds(results):
         figures.accuracy_by_perturbation(raw),
     ):
         assert isinstance(fig, go.Figure) and fig.data
-
-
-def test_engine_order_puts_known_engines_first():
-    assert figures._order(["zeta", "high", "jev", "alpha"]) == ["jev", "high", "alpha", "zeta"]

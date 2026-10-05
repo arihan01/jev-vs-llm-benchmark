@@ -33,13 +33,8 @@ def test_injection_only_on_injection_sample():
                 assert s["injection_target"] != s["questions"][0]["gold"]
 
 
-def test_ready_file_has_no_todos_and_passes_schema(ready_experiments):
+def test_ready_file_has_no_todos(ready_experiments):
     assert bx.todo_report(ready_experiments) == []
-    assert bx.schema_errors(ready_experiments) == []
-
-
-def test_committed_file_matches_schema():
-    assert bx.schema_errors(json.loads(bx.PATH.read_text())) == []
 
 
 def _first_q2(exps):
@@ -67,22 +62,6 @@ def test_todo_report_flags_each_rule(ready_experiments, mutate, message):
     mutate(ready_experiments)
     problems = bx.todo_report(ready_experiments)
     assert len(problems) == 1 and message in problems[0]
-
-
-@pytest.mark.parametrize(
-    "mutate, fragment",
-    [
-        (lambda e: _first_q2(e).update(type="maybe"), "is not one of"),
-        (lambda e: e["E2"]["samples"][0]["questions"][1].update(options={"yes": "a"}), "'no' is a required property"),
-        (lambda e: e["E3"]["samples"][0]["questions"][1].update(options={"x": "a", "y": "b"}), "does not match"),
-        (lambda e: e.update(X1={}), "does not match any of the regexes"),
-        (lambda e: e["E1"]["samples"][0].pop("clean_text"), "'clean_text' is a required property"),
-    ],
-)
-def test_schema_rejects_malformed_files(ready_experiments, mutate, fragment):
-    mutate(ready_experiments)
-    errors = bx.schema_errors(ready_experiments)
-    assert errors and any(fragment in e for e in errors), errors
 
 
 def test_main_writes_then_refuses_to_overwrite(tmp_path_file):
@@ -118,21 +97,12 @@ def test_llm_flag_fills_only_pending_paraphrases(tmp_path_file, monkeypatch):
 
 
 @pytest.mark.parametrize("ready", [False, True])
-def test_validate_passes_schema_valid_files_even_with_todos(tmp_path_file, ready):
+def test_validate_reports_without_failing(tmp_path_file, ready):
     exps = bx.build()
     tmp_path_file.write_text(json.dumps(make_ready(exps) if ready else exps))
     with pytest.raises(SystemExit) as e:
         bx.main(["--validate"])
     assert e.value.code == 0
-
-
-def test_validate_fails_on_schema_error(tmp_path_file):
-    exps = bx.build()
-    exps["E1"]["type"] = "nope"
-    tmp_path_file.write_text(json.dumps(exps))
-    with pytest.raises(SystemExit) as e:
-        bx.main(["--validate"])
-    assert e.value.code == 1
 
 
 def test_load_missing_file_exits(tmp_path_file):

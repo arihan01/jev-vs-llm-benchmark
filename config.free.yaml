@@ -1,0 +1,55 @@
+# Free-trial engines: no OpenRouter credits needed. Select with
+#   make bench CONFIG=config.free.yaml   or   BENCH_CONFIG=config.free.yaml
+# Results go to results/free/ and the cache is keyed by model, so nothing here
+# mixes with a config.yaml run. Free model ids change often; confirm them at
+# https://openrouter.ai/models?q=free before running.
+seed: 42
+repeats: 3
+concurrency: 5
+timeout_s: 60
+results_dir: results/free
+free_daily_limit: 50   # OpenRouter :free cap per account; 1000 after a one-time $10 purchase
+openrouter_base: https://openrouter.ai/api/v1
+jev_decisions_url: https://openrouter.ai/api/alpha/decisions
+engines:
+  # TypeSafe direct: same request body as the Decisions API; usage has tokens but no
+  # cost, so cost is tokens x price.
+  jev:
+    kind: jev
+    model: jev-1.13.0
+    base_url: https://api.typesafe.ai/v1/systemone
+    api_key_env: TYPESAFE_API_KEY
+    price_in: 0.042
+    price_out: 0
+  low:
+    kind: llm
+    model: qwen/qwen3.8-27b:free
+    reasoning: off
+    concurrency: 1
+    rpm: 20
+    price_in: 0
+    price_out: 0
+  # Does not advertise response_format, so the answer is parsed from plain text.
+  # A reasoning model: with reasoning on, it spends max_tokens thinking and returns
+  # empty content. Schema-capable fallback: nvidia/nemotron-3-super-120b-a12b:free
+  high:
+    kind: llm
+    model: nvidia/nemotron-3-ultra-550b-a55b:free
+    structured_output: false
+    reasoning: off
+    max_tokens: 400
+    concurrency: 1
+    rpm: 20
+    price_in: 0
+    price_out: 0
+perturb_generator: { model: nvidia/nemotron-3-super-120b-a12b:free }   # not under test; uses 3 of the daily free calls
+experiments:
+  E1: { type: choice, task: choice }
+  E2: { type: noul,   task: noul }
+  E3: { type: score,  task: score }
+samples: 5
+sample_perturbations: [typo, paraphrase, padding, distractor, injection]
+tasks:
+  choice: { dataset: PolyAI/banking77, split: test }
+  score:  { dataset: Yelp/yelp_review_full, split: test, truncate_chars: 2000 }
+  noul:   { dataset: google/boolq, split: validation }

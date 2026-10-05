@@ -13,6 +13,7 @@ from .config import DATA, TASKS, load, setup_logging
 
 log = logging.getLogger(__name__)
 
+N_ITEMS = 300
 BANKING77_CSV = "https://raw.githubusercontent.com/PolyAI-LDN/task-specific-datasets/master/banking_data/test.csv"
 
 
@@ -25,8 +26,7 @@ def _raw(task: str) -> pd.DataFrame:
     if task == "choice":
         # PolyAI/banking77 on the Hub is a loading script, which `datasets` no longer
         # runs; the script itself downloads this CSV, so it is the same data.
-        ds = load_dataset("csv", data_files=BANKING77_CSV, split="train")
-        df = ds.to_pandas()
+        df = pd.read_csv(BANKING77_CSV)
         return pd.DataFrame({"text": df["text"], "gold": df["category"].map(norm_intent)})
     ds = load_dataset(spec["dataset"], split=spec["split"]).to_pandas()
     if task == "score":
@@ -74,7 +74,7 @@ def main(force: bool = False):
         if path(task).exists() and not force:
             log.info("%s already frozen; skipping (use --force to resample)", path(task).name)
             continue
-        rows = sample(task, cfg.get("n_items", 300), cfg["seed"])
+        rows = sample(task, N_ITEMS, cfg["seed"])
         write_jsonl(path(task), rows)
         log.info("wrote %d items -> %s", len(rows), path(task).relative_to(DATA.parent))
 

@@ -42,7 +42,8 @@ def test_jsonl_round_trip(tmp_path):
 
 
 def test_main_writes_each_task_once(fake, monkeypatch):
-    monkeypatch.setattr(data, "load", lambda: {"n_items": 10, "seed": 42})
+    monkeypatch.setattr(data, "load", lambda: {"seed": 42})
+    monkeypatch.setattr(data, "N_ITEMS", 10)
     data.main()
     written = {p.name: p.read_text() for p in fake.glob("*.jsonl")}
     assert set(written) == {"choice.jsonl", "score.jsonl", "noul.jsonl"}
