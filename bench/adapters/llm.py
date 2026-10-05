@@ -1,4 +1,5 @@
 import json
+import math
 import re
 
 from .. import prompts
@@ -41,6 +42,17 @@ def parse_content(content: str) -> dict | None:
         except json.JSONDecodeError:
             return None
     return obj if isinstance(obj, dict) else None
+
+
+def confidence(value, n_options: int) -> float:
+    """Self-reported confidence clamped to [0, 1]. A missing, non-numeric or
+    non-finite value becomes the neutral 1/n rather than 0, so the chosen label
+    never ends up less likely than the options the model did not pick."""
+    try:
+        c = float(value)
+    except (TypeError, ValueError):
+        return 1 / n_options
+    return min(max(c, 0.0), 1.0) if math.isfinite(c) else 1 / n_options
 
 
 SCHEMA_REJECTED = re.compile(r"response_format|json_schema|structured", re.I)
@@ -103,10 +115,7 @@ class LLMAdapter(Adapter):
             p.label = label
             p.error = "label not in option set"
             return p
-        try:
-            conf = min(max(float(obj.get("confidence", 0.0)), 0.0), 1.0)
-        except (TypeError, ValueError):
-            conf = 0.0
+        conf = confidence(obj.get("confidence"), len(keys))
         rest = (1 - conf) / (len(keys) - 1)
         p.label, p.valid, p.confidence = label, True, conf
         p.probs = {k: (conf if k == label else rest) for k in keys}

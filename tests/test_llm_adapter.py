@@ -77,15 +77,10 @@ def test_choice_has_no_value():
 
 
 @pytest.mark.parametrize(
-    "content, conf",
-    [('{"label": "2", "confidence": 7}', 1.0), ('{"label": "2", "confidence": -1}', 0.0), ('{"label": "2"}', 0.0)],
+    "content, conf", [('{"label": "2", "confidence": 7}', 1.0), ('{"label": "2", "confidence": -1}', 0.0)]
 )
 def test_confidence_is_clamped(content, conf):
     assert llm().parse(Q_SCORE, resp(content)).confidence == conf
-
-
-def test_non_numeric_confidence_becomes_zero():
-    assert llm().parse(Q_SCORE, resp('{"label": "2", "confidence": "high"}')).confidence == 0.0
 
 
 @pytest.mark.parametrize(
@@ -140,3 +135,12 @@ def test_reasoning_model_empty_content_is_invalid_with_a_clear_error():
     p = llm().parse(Q_SCORE, response)
     assert not p.valid and "empty content (finish_reason=length" in p.error and "reasoning model" in p.error
     assert "empty content" in llm().parse(Q_SCORE, {"choices": [{"message": {"content": None}}]}).error
+
+
+@pytest.mark.parametrize(
+    "content", ['{"label": "0"}', '{"label": "0", "confidence": "high"}', '{"label": "0", "confidence": NaN}']
+)
+def test_missing_or_broken_confidence_is_neutral_not_zero(content):
+    p = llm().parse(Q_SCORE, resp(content))
+    assert p.valid and p.confidence == pytest.approx(1 / 3)
+    assert p.probs == pytest.approx({"0": 1 / 3, "1": 1 / 3, "2": 1 / 3})
