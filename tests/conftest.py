@@ -29,7 +29,11 @@ def fake_response(body: dict) -> dict:
         else:
             ans = {"type": "noul", "noul": rng.random()}
         return {"answers": {qid: ans}, "usage": {"prompt_tokens": 100, "cost": 4.2e-6}}
-    keys = body["response_format"]["json_schema"]["schema"]["properties"]["label"]["enum"]
+    if "response_format" in body:
+        keys = body["response_format"]["json_schema"]["schema"]["properties"]["label"]["enum"]
+    else:
+        opts = body["messages"][-1]["content"].split("Options:\n", 1)[1].split("\nInput:", 1)[0]
+        keys = [line.split(":", 1)[0] for line in opts.splitlines()]
     label = rng.choice(keys) if rng.random() > 0.05 else "bogus"
     return {
         "choices": [{"message": {"content": f'{{"label": "{label}", "confidence": {rng.random():.2f}}}'}}],

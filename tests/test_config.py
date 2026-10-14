@@ -18,7 +18,8 @@ def test_headers(monkeypatch):
 
 def test_engines_follow_config_order():
     raw = yaml.safe_load((config.ROOT / "config.yaml").read_text())
-    assert list(config.engines()) == list(raw["engines"]) == ["jev", "low", "high"]
+    assert list(raw["engines"]) == ["jev", "low", "high", "stat"]
+    assert list(config.engines()) == ["jev", "low", "high"]  # stat ships disabled
 
 
 def test_engine_order_puts_configured_engines_first():

@@ -22,7 +22,6 @@ def row(engine, typ="choice", accuracy=0.5, cost=0.01, **extra):
         "attempted": 30,
         "invalid_rate": 0.0,
         "error_rate": 0.0,
-        "injection_success": float("nan"),
         **extra,
     }
 

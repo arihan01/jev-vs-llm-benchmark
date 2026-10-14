@@ -1,3 +1,6 @@
+"""Adapter for chat LLMs over an OpenAI-style endpoint: the question as a
+prompt with a JSON schema for the answer, parsed into a label and confidence."""
+
 import json
 import math
 import re
@@ -27,20 +30,36 @@ def response_format(q: dict) -> dict:
     }
 
 
+def sanitise_json(text: str) -> str:
+    """Repairs the slips models make in hand-written JSON: smart quotes, unquoted
+    keys, Python literals, trailing commas and an unclosed final brace."""
+    text = text.translate(str.maketrans("\u201c\u201d\u2018\u2019", "\"\"''"))
+    if '"' not in text:
+        text = text.replace("'", '"')
+    text = re.sub(r"([{,]\s*)([A-Za-z_]\w*)\s*:", r'\1"\2":', text)
+    text = re.sub(r"\bTrue\b", "true", re.sub(r"\bFalse\b", "false", re.sub(r"\bNone\b", "null", text)))
+    text = re.sub(r",\s*([}\]])", r"\1", text)
+    return text + "}" * max(text.count("{") - text.count("}"), 0)
+
+
+def _loads(text: str):
+    for t in (text, sanitise_json(text)):
+        try:
+            return json.loads(t)
+        except json.JSONDecodeError:
+            pass
+    return None
+
+
 def parse_content(content: str) -> dict | None:
+    """JSON object from a reply that may be fenced in ```, wrapped in chat text or
+    slightly malformed."""
     if not content:
         return None
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
-    try:
-        obj = json.loads(text)
-    except json.JSONDecodeError:
-        m = re.search(r"\{.*\}", text, re.S)
-        if not m:
-            return None
-        try:
-            obj = json.loads(m.group(0))
-        except json.JSONDecodeError:
-            return None
+    obj = _loads(text)
+    if obj is None and (m := re.search(r"\{.*\}", text, re.S) or re.search(r"\{.*", text, re.S)):
+        obj = _loads(m.group(0))
     return obj if isinstance(obj, dict) else None
 
 
@@ -55,6 +74,7 @@ def confidence(value, n_options: int) -> float:
     return min(max(c, 0.0), 1.0) if math.isfinite(c) else 1 / n_options
 
 
+# What a 400 body says when the provider cannot honour `response_format`.
 SCHEMA_REJECTED = re.compile(r"response_format|json_schema|structured", re.I)
 
 
@@ -73,19 +93,27 @@ class LLMAdapter(Adapter):
             return {**rec, "request": plain}
 
     def build_request(self, q, text, temperature=0.0):
+        openrouter = is_openrouter(self.spec)
+        # OpenAI's own API rejects max_tokens on its newer models.
         body: dict = {
             "model": self.model,
             "messages": prompts.llm_messages(q, text),
-            "max_tokens": self.spec.get("max_tokens", 200),
+            ("max_tokens" if openrouter else "max_completion_tokens"): self.spec.get("max_tokens", 200),
         }
         if self.spec.get("structured_output", True):
             body["response_format"] = response_format(q)
+        # `temperature: null` in the spec omits it, for models that only accept their default.
+        temperature = self.spec.get("temperature", temperature)
         if temperature is not None:
             body["temperature"] = temperature
-        if is_openrouter(self.spec):
+        if openrouter:
             body["usage"] = {"include": True}
+            if "response_format" in body:
+                # Route only to providers that enforce the schema, so the answer is boxed into the option enum.
+                body["provider"] = {"require_parameters": True}
             if self.spec.get("reasoning") is False or self.spec.get("reasoning") == "off":
                 body["reasoning"] = {"enabled": False}
+        body.update(self.spec.get("extra") or {})
         return body
 
     def parse(self, q, response) -> Prediction:
@@ -116,6 +144,8 @@ class LLMAdapter(Adapter):
             p.error = "label not in option set"
             return p
         conf = confidence(obj.get("confidence"), len(keys))
+        # The model gives one label and one number. Spreading the remaining mass evenly over
+        # the other options yields a full distribution comparable with Jev's probabilities.
         rest = (1 - conf) / (len(keys) - 1)
         p.label, p.valid, p.confidence = label, True, conf
         p.probs = {k: (conf if k == label else rest) for k in keys}

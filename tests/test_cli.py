@@ -1,5 +1,6 @@
 import pytest
 
+from bench import cache as run_cache
 from bench import run
 
 
@@ -43,7 +44,8 @@ def test_all_runs_then_reports(monkeypatch):
     assert order == ["check", ("run", 270), "report"]
 
 
-def test_dry_with_free_config_reports_days(capsys):
+def test_dry_with_free_config_reports_days(capsys, monkeypatch, tmp_path):
+    monkeypatch.setattr(run_cache, "CACHE", tmp_path)
     try:
         run.main(["--dry", "--config", "config.free.yaml"])
     finally:

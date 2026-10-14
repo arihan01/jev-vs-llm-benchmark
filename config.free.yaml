@@ -42,13 +42,15 @@ engines:
     rpm: 20
     price_in: 0
     price_out: 0
+  # TF-IDF + logistic regression trained on each dataset's train split; local, no key, Q1 only.
+  stat: { kind: baseline, model: tfidf-logreg, enabled: false }
 perturb_generator: { model: nvidia/nemotron-3-super-120b-a12b:free }   # not under test; uses 3 of the daily free calls
 experiments:
   E1: { type: choice, task: choice }
   E2: { type: noul,   task: noul }
   E3: { type: score,  task: score }
 samples: 5
-sample_perturbations: [typo, paraphrase, padding, distractor, injection]
+sample_perturbations: [typo, paraphrase, padding, distractor, clean]
 tasks:
   choice: { dataset: PolyAI/banking77, split: test }
   score:  { dataset: Yelp/yelp_review_full, split: test, truncate_chars: 2000 }

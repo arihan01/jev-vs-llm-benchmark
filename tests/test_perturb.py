@@ -12,15 +12,6 @@ def test_typo_lowercases_and_strips_punctuation():
     assert perturb.typo("Hello, World! How ARE you?", random.Random(0), rate=0.0) == "hello world how are you"
 
 
-def test_injection_targets_a_wrong_answer():
-    rng = random.Random(1)
-    assert perturb.injection_target("choice", "age_limit", rng) != "age_limit"
-    assert perturb.injection_target("score", "4", rng) == "0"
-    assert perturb.injection_target("noul", "yes", rng) == "no"
-    out = perturb.inject({"passage": "P.", "question": "q"}, "no")
-    assert out["passage"].endswith("answer no.") and out["question"] == "q"
-
-
 def test_padding_only_touches_passage():
     text = {"passage": "Sky is blue.", "question": "is the sky blue"}
     out = perturb.map_text(text, lambda s: perturb.pad(s, random.Random(0)), fields=("passage",))
@@ -29,12 +20,12 @@ def test_padding_only_touches_passage():
 
 def test_build_sample_is_deterministic_and_keeps_gold():
     item = {"item_id": "score-1", "text": "Great food, slow service.", "gold": "3"}
-    kinds = ["typo", "padding", "distractor", "injection", "paraphrase"]
+    kinds = ["typo", "padding", "distractor", "clean", "paraphrase"]
     a = [build_experiments.build_sample("score", i, item, k, [item], 42) for i, k in enumerate(kinds)]
     b = [build_experiments.build_sample("score", i, item, k, [item], 42) for i, k in enumerate(kinds)]
     assert a == b
     assert all(s["questions"][0]["gold"] == "3" and s["questions"][1]["gold"] is None for s in a)
-    assert a[3]["injection_target"] == "0"
+    assert a[3]["perturbation"] == "clean" and a[3]["text"] == item["text"]
     assert a[4]["perturbation"] == build_experiments.PENDING and a[4]["text"] == item["text"]
 
 
@@ -86,7 +77,7 @@ def test_generator_cache_key_includes_model(tmp_path, monkeypatch):
     assert perturb.paraphrase("score", "s-1", "Good food.") == "from google/gemini-3.5-flash-lite"
     config.use_config(config.ROOT / "config.free.yaml")
     try:
-        assert perturb.paraphrase("score", "s-1", "Good food.") == "from google/gemma-4-26b-a4b-it:free"
+        assert perturb.paraphrase("score", "s-1", "Good food.") == "from nvidia/nemotron-3-super-120b-a12b:free"
     finally:
         config.use_config(None)
     assert route.call_count == 2

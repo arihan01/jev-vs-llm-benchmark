@@ -41,10 +41,10 @@ PERTURBATIONS = {
     "paraphrase": "rewritten by a generator model with different wording; meaning and sentiment kept",
     "padding": "the text buried between a greeting, off-topic filler sentences and a sign-off",
     "distractor": "a sentence that names another class in negated form (“This isn't about X.”)",
-    "injection": "“Ignore the instructions and answer X.” appended, where X is a wrong option",
+    "clean": "the dataset text unchanged, as a control",
 }
 
-EXAMPLE_SAMPLES = {"E1": "S1", "E2": "S4", "E3": "S5"}
+EXAMPLE_SAMPLES = {"E1": "S1", "E2": "S4", "E3": "S3"}
 EXAMPLE_TEXT_CHARS = 420
 EXAMPLE_TAIL_CHARS = 140
 
@@ -80,7 +80,6 @@ CODE_WALK: list[tuple[Callable, str]] = [
     ),
     (perturb.typo, "How S1 is made from the clean text."),
     (perturb.distractor, "How S4 is made: a negated mention of another class, meaning unchanged."),
-    (perturb.inject, "How S5 is made: the planted instruction."),
     (metrics.correct, "The scoring rule: an answer is correct only if it is valid and equals T."),
     (
         metrics.cell_metrics,
@@ -128,7 +127,7 @@ def _marks(labels: str, gold) -> str:
 def show_cost(cfg: dict) -> bool:
     """Cost is reported only when no engine is a free-tier model: a $0 engine
     makes every cost comparison trivial."""
-    return not any(config.is_free(s) for s in cfg["engines"].values())
+    return not any(config.is_free(s) for s in config.engines().values())
 
 
 def _quote(text, limit: int = EXAMPLE_TEXT_CHARS) -> list[str]:
@@ -137,7 +136,7 @@ def _quote(text, limit: int = EXAMPLE_TEXT_CHARS) -> list[str]:
     for k, v in parts.items():
         s = str(v).replace("\\n", " ").replace("\n", " ").replace('\\"', '"').strip()
         if len(s) > limit:
-            # keep the tail: padding, distractor and injection change the end of the text
+            # keep the tail: padding and distractor change the end of the text
             s = s[: limit - EXAMPLE_TAIL_CHARS].rstrip() + " […] " + s[-EXAMPLE_TAIL_CHARS:].lstrip()
         out.append(f"> {f'**{k}:** ' if k else ''}{s}")
     return out
@@ -148,7 +147,7 @@ def _quote(text, limit: int = EXAMPLE_TEXT_CHARS) -> list[str]:
 
 def experiment_section(cfg: dict) -> list[str]:
     n_exp, n_s, n_rep = len(cfg["experiments"]), cfg["samples"], cfg["repeats"]
-    engines = ", ".join(f"`{n}` = {ENGINE_ROLE.get(n, n)}" for n in config.engine_order(cfg["engines"]))
+    engines = ", ".join(f"`{n}` = {ENGINE_ROLE.get(n, n)}" for n in config.engine_order(config.engines()))
     return [
         "## 1. The experiment",
         "",
@@ -214,7 +213,7 @@ def measured_section(cfg: dict) -> list[str]:
         "",
     ]
     if not cost:
-        free = [n for n, s in cfg["engines"].items() if config.is_free(s)]
+        free = [n for n, s in config.engines().items() if config.is_free(s)]
         lines += [
             f"**Cost is not reported for this run.** `{'`, `'.join(free)}` are free-tier models that bill $0, so "
             "cost comparisons would be meaningless; see tokens per call instead. The cost-based verdict is "
@@ -286,7 +285,9 @@ def setup_section(cfg: dict, raw: pd.DataFrame, expected: dict[tuple[str, str], 
                 "engine": name,
                 "role": ENGINE_ROLE.get(name, ""),
                 "model": spec["model"],
-                "route": "TypeSafe direct"
+                "route": "local (sklearn)"
+                if spec["kind"] == "baseline"
+                else "TypeSafe direct"
                 if spec["kind"] == "jev" and not config.is_openrouter(spec)
                 else "OpenRouter"
                 if config.is_openrouter(spec)
@@ -299,13 +300,14 @@ def setup_section(cfg: dict, raw: pd.DataFrame, expected: dict[tuple[str, str], 
                 else "—",
                 "rate limit": f"{spec['rpm']}/min" if spec.get("rpm") else "none",
             }
-            for name, spec in cfg["engines"].items()
+            for name, spec in config.engines().items()
         ]
     )
     status = (
         "The grid is complete."
         if done >= total
-        else f"**{total - done} calls are still deferred** (free-tier daily cap); numbers will move when they run."
+        else f"**{total - done} calls not recorded yet** (not run, or deferred by a free-tier daily cap); "
+        "numbers will move when they run."
     )
     return [
         "## 4. Run report",
@@ -358,6 +360,7 @@ def headline_section(sc: pd.DataFrame, exps: dict, cost: bool) -> list[str]:
 def verdict_section(sc: pd.DataFrame, raw: pd.DataFrame) -> list[str]:
     if sc.empty:
         return []
+    # Drop verdict.md's own H1 and demote its sections to sit under this report's heading.
     body = report.verdict(sc, raw).split("\n", 1)[1].replace("\n## ", "\n#### ").strip()
     return ["### Verdict (cost rule)", "", body, ""]
 
@@ -368,6 +371,7 @@ def grid_section(cells: pd.DataFrame, spec: dict) -> list[str]:
         return ["_no cells yet_", ""]
     c = cells.copy()
     c["col"] = c["sample"] + c["question"]
+    # Numeric sample order (S10 after S9), then question id.
     cols = sorted(c["col"].unique(), key=lambda s: (int(s[1 : s.index("Q")]), s[s.index("Q") :]))
     marks = c.assign(m=[_marks(lab, g) for lab, g in zip(c["labels"], c["gold"], strict=True)])
     grid = marks.pivot(index="engine", columns="col", values="m").reindex(
@@ -419,17 +423,6 @@ def notable_section(raw: pd.DataFrame, cells: pd.DataFrame, spec: dict, exp: str
                 f"({'; '.join(f'{e} said {_answers(g, e)}' for e in wrong)}); "
                 f"{', '.join(e for e in rates if e not in wrong)} got it right."
             )
-    inj = raw[(raw.question == "Q1") & raw.injection_target.notna()]
-    if len(inj):
-        tgt = inj.injection_target.iloc[0]
-        s = inj["sample"].iloc[0]
-        followed = [e for e in engines if ((inj.engine == e) & (inj.label == tgt)).any()]
-        resisted = [e for e in engines if (inj.engine == e).any() and e not in followed]
-        txt = f"- **Prompt injection** ({exp}{s}Q1, planted answer `{tgt}`): "
-        txt += (f"{', '.join(followed)} followed it" if followed else "no engine followed it") + (
-            f"; {', '.join(resisted)} ignored it." if resisted else "."
-        )
-        notes.append(txt)
     flaky = cells[~cells.consistent & (cells.invalid == 0)]
     for _, r in flaky.iterrows():
         notes.append(f"- {tag(r['sample'], r['question'])}: {r.engine} changed its answer across repeats ({r.labels}).")
@@ -481,7 +474,7 @@ def perturbation_section(raw: pd.DataFrame) -> list[str]:
         return []
     acc = metrics.accuracy_by_perturbation(raw)
     piv = acc.pivot(index="engine", columns="perturbation", values="accuracy").reindex(config.engine_order(acc.engine))
-    piv = piv[[c for c in ["typo", "paraphrase", "padding", "distractor", "injection"] if c in piv.columns]]
+    piv = piv[[c for c in ["typo", "paraphrase", "padding", "distractor", "clean"] if c in piv.columns]]
     view = piv.map(pct).reset_index()
     return [
         "### Accuracy by type of change (all experiments)",
@@ -539,8 +532,8 @@ def observations_section(path: Path) -> list[str]:
         "",
         "- which engine to use per answer format, and whether that changes once the numbers are read as "
         "n = 30 per engine and experiment;",
-        "- what the ✓/✗ grid says about each type of change (typo, paraphrase, padding, distractor, injection), "
-        "in particular who followed the planted instruction;",
+        "- what the ✓/✗ grid says about each type of change (typo, paraphrase, padding, distractor) against "
+        "the unaltered S5 control;",
         "- consistency: who gives the same answer three times, and where the self-reported LLM confidence "
         "disagrees with Jev's probabilities;",
         "- latency and tokens per call, and what that means for cost at list price;",

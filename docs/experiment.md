@@ -5,7 +5,7 @@
 ```mermaid
 flowchart LR
   subgraph Data["1 · Data (frozen, seed 42)"]
-    HF[(HF datasets<br/>Banking77 · BoolQ · Yelp)] --> S["5 samples per experiment<br/>S1 typo · S2 paraphrase · S3 padding<br/>S4 distractor · S5 injection"]
+    HF[(HF datasets<br/>Banking77 · BoolQ · Yelp)] --> S["5 samples per experiment<br/>S1 typo · S2 paraphrase · S3 padding<br/>S4 distractor · S5 clean (control)"]
     S --> Q["2 questions per sample<br/>Q1 dataset task + gold T<br/>Q2 hand-written + gold T"]
   end
   Q --> X[data/experiments.json]
@@ -16,7 +16,7 @@ flowchart LR
   subgraph Eng["3 · Engines (one OpenRouter key, temp 0, 3 repeats)"]
     J[jev · typesafe/jev-1.13<br/>Decisions API]
     L[low · qwen3.5-9b<br/>JSON schema mimics Jev]
-    H[high · claude-opus-5.5<br/>JSON schema mimics Jev]
+    H[high · gpt-6-sol<br/>JSON schema mimics Jev]
   end
   E1 & E2 & E3 --> J & L & H
   J & L & H --> R["EiSjQp × engine × repeat<br/>label · probs · confidence<br/>tokens · latency · cost · valid"]

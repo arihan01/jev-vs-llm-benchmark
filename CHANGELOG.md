@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Removed
+- The prompt-injection perturbation and its `injection_target` / `injection_success` fields. S5 is now the
+  unaltered dataset text, as a control.
+
 ### Added
 - Free-trial mode: `config.free.yaml` (Jev via TypeSafe direct, two OpenRouter `:free` LLMs), selected
   with `--config`, `BENCH_CONFIG` or `make ... CONFIG=`.

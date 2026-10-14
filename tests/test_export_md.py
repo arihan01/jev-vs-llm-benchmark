@@ -50,7 +50,7 @@ def test_export_reads_like_the_dashboard(sandbox, ready_experiments, monkeypatch
     assert "<details>" not in md
     assert "Every call" not in md and "Cell detail" not in md and "Inputs and questions" not in md
     assert "| S1 | Q1 |" not in md
-    assert "**Prompt injection**" in md
+    assert "clean" in md
     assert "raw.parquet" in md
 
 
@@ -59,7 +59,7 @@ def test_export_marks_incomplete_grid(sandbox, ready_experiments, monkeypatch):
     monkeypatch.setattr(export_md, "load_experiments", lambda: ready_experiments)
     runner.run(runner.build_jobs(ready_experiments, exp=["E1"], engine=["jev"]))
     md = export_md.main(["--out", str(tmp / "r.md")]).read_text()
-    assert "calls are still deferred" in md
+    assert "calls not recorded yet" in md
     assert "·" in md  # unrun cells in the grid
 
 

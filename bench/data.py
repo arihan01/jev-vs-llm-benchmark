@@ -30,6 +30,7 @@ def _raw(task: str) -> pd.DataFrame:
         return pd.DataFrame({"text": df["text"], "gold": df["category"].map(norm_intent)})
     ds = load_dataset(spec["dataset"], split=spec["split"]).to_pandas()
     if task == "score":
+        # Yelp reviews run to thousands of characters; truncation keeps prompt sizes comparable.
         n = spec.get("truncate_chars", 2000)
         return pd.DataFrame({"text": ds["text"].str.slice(0, n), "gold": ds["label"].astype(str)})
     return pd.DataFrame(
@@ -43,6 +44,7 @@ def _raw(task: str) -> pd.DataFrame:
 def sample(task: str, n: int, seed: int) -> list[dict]:
     df = _raw(task)
     df["item_id"] = [f"{task}-{i}" for i in df.index]
+    # Stratified so every intent, star level and yes/no answer keeps its dataset share.
     picked, _ = train_test_split(df, train_size=n, stratify=df["gold"], random_state=seed)
     return [{"item_id": r.item_id, "text": r.text, "gold": r.gold} for r in picked.itertuples()]
 

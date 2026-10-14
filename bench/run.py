@@ -1,3 +1,6 @@
+"""CLI entry point: builds the job list from the filters, runs it and writes
+the report. `--dry` prints the jobs and a cost estimate without calling anything."""
+
 import argparse
 import json
 import math
@@ -16,14 +19,15 @@ def _split(s):
 
 def estimate(jobs) -> None:
     """Rough cost from prompt length (~4 chars per token) and the config prices."""
-    specs = engines()
+    specs = engines(include_disabled=True)
     total = 0.0
     per: dict[str, float] = {}
     for j in jobs:
         spec = specs[j.engine]
         body = make(j.engine, spec).build_request(j.question, j.sample["text"])
         t_in = len(json.dumps(body)) / 4
-        t_out = 0 if spec["kind"] == "jev" else 20
+        # Jev returns no completion text; an LLM's JSON answer is about 20 tokens.
+        t_out = 0 if spec["kind"] != "llm" else 20
         c = (t_in * spec.get("price_in", 0) + t_out * spec.get("price_out", 0)) / 1e6
         per[j.engine] = per.get(j.engine, 0.0) + c
         total += c
@@ -35,7 +39,7 @@ def estimate(jobs) -> None:
 
 def free_days(jobs) -> None:
     """OpenRouter's :free models share one per-account daily request cap."""
-    specs = engines()
+    specs = engines(include_disabled=True)
     free = [j for j in jobs if is_free(specs[j.engine])]
     if not free:
         return

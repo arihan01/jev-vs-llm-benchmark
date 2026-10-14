@@ -1,0 +1,276 @@
+<mxfile>
+  <diagram id="3Bt0oPGSp8WbZYLy0BpC" name="Page-1">
+    <mxGraphModel dx="3730" dy="2425" grid="1" gridSize="10" guides="1" tooltips="0" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <UserObject label="" mermaidData="{&#10;  &quot;data&quot;: &quot;%%{init: {\&quot;flowchart\&quot;: {\&quot;wrappingWidth\&quot;: 520, \&quot;nodeSpacing\&quot;: 40, \&quot;rankSpacing\&quot;: 40}}}%%\nflowchart TB\n  subgraph prep[\&quot;A · prepared once\&quot;]\n    direction LR\n    D[(\&quot;Banking77 · BoolQ · Yelp\&quot;)] --&gt;|\&quot;300 / task, seed 42\&quot;| F[\&quot;data/{task}.jsonl&lt;br/&gt;{item_id, text, gold}\&quot;]\n    F --&gt;|\&quot;first 5 / task\&quot;| P[\&quot;perturb.py&lt;br/&gt;typo · paraphrase · padding&lt;br/&gt;distractor · S5 clean\&quot;]\n    P --&gt; X[\&quot;data/experiments.json — per sample:&lt;br/&gt;{id, perturbation, clean_text, text,&lt;br/&gt;questions: [{id, type, instructions,&lt;br/&gt;options: {key: description}, gold}]}\&quot;]\n    H[\&quot;human writes Q2 + T\&quot;] --&gt; X\n  end\n\n  X --&gt; J1 &amp; L1\n\n  subgraph send[\&quot;B · one request per question — same instructions, option descriptions and text to both\&quot;]\n    direction LR\n    J1[\&quot;Jev request (JSON body)&lt;br/&gt;{&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;quot;model&amp;quot;: &amp;quot;jev-1.13.0&amp;quot;,&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;quot;state&amp;quot;: &amp;quot;&amp;lt;sample text&amp;gt;&amp;quot;,&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;quot;questions&amp;quot;: {&amp;quot;Q1&amp;quot;: {&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;quot;type&amp;quot;: &amp;quot;choice | score | noul&amp;quot;,&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;quot;instructions&amp;quot;: &amp;quot;&amp;lt;question&amp;gt;&amp;quot;,&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;quot;criteria&amp;quot;: {key: description}&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;score: [level descriptions]&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;noul: {true: yes-text, false: no-text}&lt;br/&gt;&amp;nbsp;&amp;nbsp;}}&lt;br/&gt;}\&quot;]\n    L1[\&quot;LLM request (chat body)&lt;br/&gt;messages:&lt;br/&gt;&amp;nbsp;&amp;nbsp;system: You are a classifier. Reply only with JSON matching the schema.&lt;br/&gt;&amp;nbsp;&amp;nbsp;user:&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;instructions&amp;gt;&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;Options:&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;key&amp;gt;: &amp;lt;description&amp;gt;&amp;nbsp;&amp;nbsp;(one line per option)&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;Input:&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;sample text&amp;gt;&lt;br/&gt;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;Return {&amp;quot;label&amp;quot;: &amp;lt;one option key&amp;gt;, &amp;quot;confidence&amp;quot;: &amp;lt;0-1&amp;gt;}.&lt;br/&gt;response_format: json_schema {label: enum(option keys), confidence: 0–1}&lt;br/&gt;temperature: 0 · max tokens 200–400 · reasoning off\&quot;]\n  end\n\n  J1 --&gt;|\&quot;POST · rate limit · retry&lt;br/&gt;latency = final attempt\&quot;| JA[\&quot;Jev API\&quot;]\n  L1 --&gt;|\&quot;POST · rate limit · retry&lt;br/&gt;latency = final attempt\&quot;| LA[\&quot;Chat API&lt;br/&gt;OpenRouter / OpenAI\&quot;]\n\n  subgraph recv[\&quot;C · received\&quot;]\n    direction LR\n    JR[\&quot;Jev response&lt;br/&gt;{&amp;quot;answers&amp;quot;: {&amp;quot;Q1&amp;quot;: {&lt;br/&gt;&amp;nbsp;&amp;nbsp;choice: {&amp;quot;choice&amp;quot;: key, &amp;quot;probabilities&amp;quot;: {key: p}}&lt;br/&gt;&amp;nbsp;&amp;nbsp;score:&amp;nbsp;&amp;nbsp;{&amp;quot;score&amp;quot;: 3.39, &amp;quot;probabilities&amp;quot;: {&amp;quot;0&amp;quot;: p, …, &amp;quot;4&amp;quot;: p}}&lt;br/&gt;&amp;nbsp;&amp;nbsp;noul:&amp;nbsp;&amp;nbsp;&amp;nbsp;{&amp;quot;noul&amp;quot;: P(yes)}&lt;br/&gt;}},&lt;br/&gt;&amp;nbsp;&amp;quot;usage&amp;quot;: {input_tokens, output_tokens, cost?}}\&quot;]\n    LR[\&quot;LLM response (expected)&lt;br/&gt;choices[0].message.content =&lt;br/&gt;&amp;nbsp;&amp;nbsp;'{&amp;quot;label&amp;quot;: &amp;quot;&amp;lt;option key&amp;gt;&amp;quot;, &amp;quot;confidence&amp;quot;: 0.96}'&lt;br/&gt;usage: {prompt_tokens, completion_tokens,&lt;br/&gt;&amp;nbsp;&amp;nbsp;cost?, prompt_tokens_details.cached_tokens?}&lt;br/&gt;anything else (empty, fenced, prose, key not in options)&lt;br/&gt;is parsed if possible, otherwise invalid\&quot;]\n  end\n  JA --&gt; JR\n  LA --&gt; LR\n\n  JR &amp; LR --&gt; C[(\&quot;.cache/ {request, response, latency_ms, status}&lt;br/&gt;re-runs re-parse, never re-call\&quot;)]\n\n  subgraph parse[\&quot;D · parse to one Prediction {label, probs, confidence, value, valid}\&quot;]\n    direction LR\n    JP[\&quot;Jev&lt;br/&gt;choice: label = choice&lt;br/&gt;score: label = argmax(probabilities), value = score&lt;br/&gt;noul: label = yes if P ≥ 0.5, value = P(yes), probs = {yes: P, no: 1−P}&lt;br/&gt;confidence = probs[label] · valid = label ∈ options\&quot;]\n    LP[\&quot;LLM&lt;br/&gt;strip code fences → json.loads → need {label}&lt;br/&gt;label ∉ options → invalid (scored wrong)&lt;br/&gt;confidence clamped to [0,1], 1/n if missing&lt;br/&gt;probs = {label: c, others: (1−c)/(n−1)}&lt;br/&gt;score: value = float(label) · noul: value = probs[yes]\&quot;]\n  end\n  C --&gt; JP &amp; LP\n\n  JP &amp; LP --&gt; R[\&quot;raw.parquet row&lt;br/&gt;exp · sample · question · engine · repeat · gold&lt;br/&gt;label · value · probs · confidence · valid · correct = valid ∧ label == gold&lt;br/&gt;latency_ms · tokens_in/out · cost = usage.cost or tokens × price · status · error\&quot;]\n  R --&gt; M[\&quot;metrics.py (status 200 only)&lt;br/&gt;cell = 3 repeats: accuracy · consistency · mean P(T) · invalid&lt;br/&gt;scorecard: ECE · Brier/AUROC (noul) · MAE (score)\&quot;]\n  M --&gt; O[\&quot;cells.csv · scorecard.csv · verdict.md · report.md/.pdf · dashboard\&quot;]&quot;,&#10;  &quot;config&quot;: null&#10;}" id="46">
+          <mxCell connectable="0" parent="1" style="group;transparentBounds=1;editIcon=1;lockedGroup=0;groupPadding=10;" vertex="1">
+            <mxGeometry as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="A · prepared once" mermaidId="n:prep" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="A · prepared once" id="2">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="603" width="683" x="301" y="10" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Banking77 · BoolQ · Yelp" mermaidId="n:D" mermaidBaseStyle="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Banking77 · BoolQ · Yelp" id="3">
+          <mxCell parent="2" style="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="67" width="190" x="423" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="data/{task}.jsonl&#10;{item_id, text, gold}" mermaidId="n:F" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="data/{task}.jsonl&#10;{item_id, text, gold}" id="4">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="73" width="208" x="414" y="181" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="perturb.py&#10;typo · paraphrase · padding&#10;distractor · S5 clean" mermaidId="n:P" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="perturb.py&#10;typo · paraphrase · padding&#10;distractor · S5 clean" id="5">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="93" width="259" x="389" y="323" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="&lt;b&gt;data/experiments.json — per sample:&lt;/b&gt;&lt;pre style=&quot;text-align:left;font-family:Menlo,Consolas,monospace;font-size:12px;margin:4px 0 0 0&quot;&gt;{id, perturbation, clean_text, text,&#10;questions: [{id, type, instructions,&#10;options: {key: description}, gold}]}&lt;/pre&gt;" mermaidId="n:X" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="&quot;data/experiments.json — per sample:&#10;{id, perturbation, clean_text, text,&#10;questions: [{id, type, instructions,&#10;options: {key: description}, gold}" id="6">
+          <mxCell parent="2" style="html=1;align=left;spacingLeft=8;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="112" width="441" x="110" y="466" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="human writes Q2 + T" mermaidId="n:H" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="human writes Q2 + T" id="7">
+          <mxCell parent="2" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="208" x="35" y="343" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="300 / task, seed 42" mermaidId="e:D-&gt;F#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="300 / task, seed 42" id="42">
+          <mxCell edge="1" parent="2" source="3" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="4">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="first 5 / task" mermaidId="e:F-&gt;P#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="first 5 / task" id="43">
+          <mxCell edge="1" parent="2" source="4" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="5">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:P-&gt;X#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.79;entryY=0;" mermaidBaseValue="" id="44">
+          <mxCell edge="1" parent="2" source="5" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.79;entryY=0;" target="6">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="518" y="441" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:H-&gt;X#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.2;entryY=0;" mermaidBaseValue="" id="45">
+          <mxCell edge="1" parent="2" source="7" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.2;entryY=0;" target="6">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="139" y="441" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="B · one request per question — same instructions, option descriptions and text to both" mermaidId="n:send" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="B · one request per question — same instructions, option descriptions and text to both" id="8">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="398" width="1387" x="45" y="643" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="&lt;b&gt;Jev request (JSON body)&lt;/b&gt;&lt;pre style=&quot;text-align:left;font-family:Menlo,Consolas,monospace;font-size:12px;margin:4px 0 0 0&quot;&gt;{&#10;  &quot;model&quot;: &quot;jev-1.13.0&quot;,&#10;  &quot;state&quot;: &quot;&amp;lt;sample text&amp;gt;&quot;,&#10;  &quot;questions&quot;: {&quot;Q1&quot;: {&#10;    &quot;type&quot;: &quot;choice | score | noul&quot;,&#10;    &quot;instructions&quot;: &quot;&amp;lt;question&amp;gt;&quot;,&#10;    &quot;criteria&quot;: {key: description}&#10;            score: [level descriptions]&#10;            noul: {true: yes-text, false: no-text}&#10;  }}&#10;}&lt;/pre&gt;" mermaidId="n:J1" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="&quot;Jev request (JSON body)&#10;{&#10;&amp;nbsp;&amp;nbsp;&amp;quot;model&amp;quot;: &amp;quot;jev-1.13.0&amp;quot;,&#10;&amp;nbsp;&amp;nbsp;&amp;quot;state&amp;quot;: &amp;quot;&amp;lt;sample text&amp;gt;&amp;quot;,&#10;&amp;nbsp;&amp;nbsp;&amp;quot;questions&amp;quot;: {&amp;quot;Q1&amp;quot;: {&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;quot;type&amp;quot;: &amp;quot;choice | score | noul&amp;quot;,&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;quot;instructions&amp;quot;: &amp;quot;&amp;lt;question&amp;gt;&amp;quot;,&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;quot;criteria&amp;quot;: {key: description}&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;score: [level descriptions" id="9">
+          <mxCell parent="8" style="html=1;align=left;spacingLeft=8;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="290" width="400" x="686" y="64" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="&lt;b&gt;LLM request (chat body)&lt;/b&gt;&lt;pre style=&quot;text-align:left;font-family:Menlo,Consolas,monospace;font-size:12px;margin:4px 0 0 0&quot;&gt;messages:&#10;  system: You are a classifier. Reply only with JSON matching the schema.&#10;  user:   &amp;lt;instructions&amp;gt;&#10;           Options:&#10;           &amp;lt;key&amp;gt;: &amp;lt;description&amp;gt;  (one line per option)&#10;           Input:&#10;           &amp;lt;sample text&amp;gt;&#10;           Return {&quot;label&quot;: &amp;lt;one option key&amp;gt;, &quot;confidence&quot;: &amp;lt;0-1&amp;gt;}.&#10;response_format: json_schema {label: enum(option keys), confidence: 0–1}&#10;temperature: 0 · max tokens 200–400 · reasoning off&lt;/pre&gt;" mermaidId="n:L1" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="LLM request (chat body)&#10;messages:&#10;&amp;nbsp;&amp;nbsp;system: You are a classifier. Reply only with JSON matching the schema.&#10;&amp;nbsp;&amp;nbsp;user:&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;instructions&amp;gt;&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;Options:&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;key&amp;gt;: &amp;lt;description&amp;gt;&amp;nbsp;&amp;nbsp;(one line per option)&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;Input:&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;lt;sample text&amp;gt;&#10;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;&amp;nbsp;Return {&amp;quot;label&amp;quot;: &amp;lt;one option key&amp;gt;, &amp;quot;confidence&amp;quot;: &amp;lt;0-1&amp;gt;}.&#10;response_format: json_schema {label: enum(option keys), confidence: 0–1}&#10;temperature: 0 · max tokens 200–400 · reasoning off" id="10">
+          <mxCell parent="8" style="html=1;align=left;spacingLeft=8;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="270" width="601" x="35" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="C · received" mermaidId="n:recv" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="C · received" id="12">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="270" width="1449" x="224" y="1232" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="&lt;b&gt;Jev response&lt;/b&gt;&lt;pre style=&quot;text-align:left;font-family:Menlo,Consolas,monospace;font-size:12px;margin:4px 0 0 0&quot;&gt;{&quot;answers&quot;: {&quot;Q1&quot;: {&#10;  choice: {&quot;choice&quot;: key, &quot;probabilities&quot;: {key: p}}&#10;  score:  {&quot;score&quot;: 3.39, &quot;probabilities&quot;: {&quot;0&quot;: p, …, &quot;4&quot;: p}}&#10;  noul:   {&quot;noul&quot;: P(yes)}&#10;}},&#10; &quot;usage&quot;: {input_tokens, output_tokens, cost?}}&lt;/pre&gt;" mermaidId="n:JR" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Jev response&#10;{&amp;quot;answers&amp;quot;: {&amp;quot;Q1&amp;quot;: {&#10;&amp;nbsp;&amp;nbsp;choice: {&amp;quot;choice&amp;quot;: key, &amp;quot;probabilities&amp;quot;: {key: p}}&#10;&amp;nbsp;&amp;nbsp;score:&amp;nbsp;&amp;nbsp;{&amp;quot;score&amp;quot;: 3.39, &amp;quot;probabilities&amp;quot;: {&amp;quot;0&amp;quot;: p, …, &amp;quot;4&amp;quot;: p}}&#10;&amp;nbsp;&amp;nbsp;noul:&amp;nbsp;&amp;nbsp;&amp;nbsp;{&amp;quot;noul&amp;quot;: P(yes)}&#10;}},&#10;&amp;nbsp;&amp;quot;usage&amp;quot;: {input_tokens, output_tokens, cost?}}" id="13">
+          <mxCell parent="12" style="html=1;align=left;spacingLeft=8;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="169" width="468" x="470" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="&lt;b&gt;LLM response (expected)&lt;/b&gt;&lt;pre style=&quot;text-align:left;font-family:Menlo,Consolas,monospace;font-size:12px;margin:4px 0 0 0&quot;&gt;choices[0].message.content =&#10;  &#x27;{&quot;label&quot;: &quot;&amp;lt;option key&amp;gt;&quot;, &quot;confidence&quot;: 0.96}&#x27;&#10;usage: {prompt_tokens, completion_tokens,&#10;  cost?, prompt_tokens_details.cached_tokens?}&#10;anything else (empty, fenced, prose, key not in options)&#10;is parsed if possible, otherwise invalid&lt;/pre&gt;" mermaidId="n:LR" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="&quot;LLM response (expected)&#10;choices[0" id="14">
+          <mxCell parent="12" style="html=1;align=left;spacingLeft=8;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="170" width="400" x="35" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="D · parse to one Prediction {label, probs, confidence, value, valid}" mermaidId="n:parse" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="D · parse to one Prediction {label, probs, confidence, value, valid}" id="17">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;verticalAlign=top;fillColor=light-dark(#ffffde,#1f2020);strokeColor=light-dark(#aaaa33,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="250" width="1316" x="10" y="1663" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Jev&#xa;choice: label = choice&#xa;score: label = argmax(probabilities), value = score&#xa;noul: label = yes if P ≥ 0.5, value = P(yes), probs = {yes: P, no: 1−P}&#xa;confidence = probs[label] · valid = label ∈ options" mermaidId="n:JP" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="&quot;Jev&#10;choice: label = choice&#10;score: label = argmax(probabilities), value = score&#10;noul: label = yes if P ≥ 0.5, value = P(yes), probs = {yes: P, no: 1−P}&#10;confidence = probs[label" id="18">
+          <mxCell parent="17" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="140" width="542" x="739" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="LLM&#xa;strip code fences → json.loads → need {label}&#xa;label ∉ options → invalid (scored wrong)&#xa;confidence clamped to [0,1], 1/n if missing&#xa;probs = {label: c, others: (1−c)/(n−1)}&#xa;score: value = float(label) · noul: value = probs[yes]" mermaidId="n:LP" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="&quot;LLM&#10;strip code fences → json.loads → need {label}&#10;label ∉ options → invalid (scored wrong)&#10;confidence clamped to [0,1" id="21">
+          <mxCell parent="17" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="160" width="440" x="35" y="45" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Jev API" mermaidId="n:JA" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Jev API" id="22">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="111" x="826" y="1139" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="Chat API&#10;OpenRouter / OpenAI" mermaidId="n:LA" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="Chat API&#10;OpenRouter / OpenAI" id="23">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="73" width="214" x="274" y="1129" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label=".cache/ {request, response, latency_ms, status}&#10;re-runs re-parse, never re-call" mermaidId="n:C" mermaidBaseStyle="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue=".cache/ {request, response, latency_ms, status}&#10;re-runs re-parse, never re-call" id="24">
+          <mxCell parent="46" style="html=1;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=10;strokeWidth=1;whiteSpace=wrap;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="81" width="360" x="451" y="1552" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="raw.parquet row&#10;exp · sample · question · engine · repeat · gold&#10;label · value · probs · confidence · valid · correct = valid ∧ label == gold&#10;latency_ms · tokens_in/out · cost = usage.cost or tokens × price · status · error" mermaidId="n:R" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="raw.parquet row&#10;exp · sample · question · engine · repeat · gold&#10;label · value · probs · confidence · valid · correct = valid ∧ label == gold&#10;latency_ms · tokens_in/out · cost = usage.cost or tokens × price · status · error" id="25">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="112" width="631" x="316" y="1963" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="metrics.py (status 200 only)&#10;cell = 3 repeats: accuracy · consistency · mean P(T) · invalid&#10;scorecard: ECE · Brier/AUROC (noul) · MAE (score)" mermaidId="n:M" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="metrics.py (status 200 only)&#10;cell = 3 repeats: accuracy · consistency · mean P(T) · invalid&#10;scorecard: ECE · Brier/AUROC (noul) · MAE (score)" id="26">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="93" width="616" x="323" y="2125" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="cells.csv · scorecard.csv · verdict.md · report.md/.pdf · dashboard" mermaidId="n:O" mermaidBaseStyle="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" mermaidBaseValue="cells.csv · scorecard.csv · verdict.md · report.md/.pdf · dashboard" id="27">
+          <mxCell parent="46" style="html=1;whiteSpace=wrap;strokeWidth=1;fillColor=light-dark(#ECECFF,#1f2020);strokeColor=light-dark(#9370DB,#cccccc);fontColor=light-dark(#333333,#cccccc);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontSize=16;" vertex="1">
+            <mxGeometry height="54" width="543" x="360" y="2268" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:X-&gt;J1#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.89;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="28">
+          <mxCell edge="1" parent="46" source="6" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.89;exitY=1;entryX=0.5;entryY=0;" target="9">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="881" y="613" />
+                <mxPoint x="881" y="638" />
+                <mxPoint x="881" y="663" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:X-&gt;L1#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.11;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="29">
+          <mxCell edge="1" parent="46" source="6" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.11;exitY=1;entryX=0.5;entryY=0;" target="10">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="381" y="613" />
+                <mxPoint x="381" y="638" />
+                <mxPoint x="381" y="663" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="POST · rate limit · retry&#10;latency = final attempt" mermaidId="e:J1-&gt;JA#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="POST · rate limit · retry&#10;latency = final attempt" id="30">
+          <mxCell edge="1" parent="46" source="9" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="22">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="POST · rate limit · retry&#10;latency = final attempt" mermaidId="e:L1-&gt;LA#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="POST · rate limit · retry&#10;latency = final attempt" id="31">
+          <mxCell edge="1" parent="46" source="10" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);html=1;fontSize=16;labelBackgroundColor=light-dark(#E8E8E88D,#2a2a2a8D);fontFamily=Trebuchet MS,Verdana,Arial,sans-serif;fontColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="23">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:JA-&gt;JR#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="32">
+          <mxCell edge="1" parent="46" source="22" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="13">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:LA-&gt;LR#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="33">
+          <mxCell edge="1" parent="46" source="23" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="14">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:JR-&gt;C#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.93;entryY=0;" mermaidBaseValue="" id="34">
+          <mxCell edge="1" parent="46" source="13" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.93;entryY=0;" target="24">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="881" y="1502" />
+                <mxPoint x="881" y="1527" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:LR-&gt;C#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.07;entryY=0;" mermaidBaseValue="" id="35">
+          <mxCell edge="1" parent="46" source="14" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.07;entryY=0;" target="24">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="381" y="1502" />
+                <mxPoint x="381" y="1527" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:C-&gt;JP#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.88;entryX=0.5;entryY=0;" mermaidBaseValue="" id="36">
+          <mxCell edge="1" parent="46" source="24" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=1;exitY=0.88;entryX=0.5;entryY=0;" target="18">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="1020" y="1658" />
+                <mxPoint x="1020" y="1683" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:C-&gt;LP#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0;exitY=0.88;entryX=0.5;entryY=0;" mermaidBaseValue="" id="37">
+          <mxCell edge="1" parent="46" source="24" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0;exitY=0.88;entryX=0.5;entryY=0;" target="21">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="242" y="1658" />
+                <mxPoint x="242" y="1683" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:JP-&gt;R#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.93;entryY=0;" mermaidBaseValue="" id="38">
+          <mxCell edge="1" parent="46" source="18" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.93;entryY=0;" target="25">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="1020" y="1913" />
+                <mxPoint x="1020" y="1938" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:LP-&gt;R#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.07;entryY=0;" mermaidBaseValue="" id="39">
+          <mxCell edge="1" parent="46" source="21" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.07;entryY=0;" target="25">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points">
+                <mxPoint x="242" y="1913" />
+                <mxPoint x="242" y="1938" />
+              </Array>
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:R-&gt;M#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="40">
+          <mxCell edge="1" parent="46" source="25" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="26">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+        <UserObject label="" mermaidId="e:M-&gt;O#0" mermaidBaseStyle="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" mermaidBaseValue="" id="41">
+          <mxCell edge="1" parent="46" source="26" style="curved=1;startArrow=none;endArrow=block;endSize=7;strokeColor=light-dark(#333333,#cccccc);exitX=0.5;exitY=1;entryX=0.5;entryY=0;" target="27">
+            <mxGeometry relative="1" as="geometry">
+              <Array as="points" />
+            </mxGeometry>
+          </mxCell>
+        </UserObject>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

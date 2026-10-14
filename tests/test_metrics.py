@@ -31,7 +31,6 @@ def rows(labels, gold, typ="choice", values=None, valid=None, conf=0.9, n_option
             "tokens_out": 2,
             "cost": 1e-5,
             "status": 200,
-            "injection_target": None,
             **extra,
         }
     )
@@ -62,12 +61,11 @@ def test_noul_brier_and_auroc():
     assert agg.brier == pytest.approx((0.01 + 0.04 + 0.01 + 0.04 + 0.01 + 0.04) / 6)
 
 
-def test_aggregate_tokens_cost_and_injection():
-    df = rows(["x", "a", "a"], "a", injection_target=["x"] * 3)
+def test_aggregate_tokens_and_cost():
+    df = rows(["x", "a", "a"], "a")
     agg = metrics.aggregate(df).iloc[0]
     assert agg.tokens_in == 30 and agg.total_cost == pytest.approx(3e-5)
     assert agg.cost_per_100_questions == pytest.approx(1e-3)
-    assert agg.injection_success == pytest.approx(1 / 3)
 
 
 def test_ece_known_value():

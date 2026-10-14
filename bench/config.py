@@ -1,3 +1,6 @@
+"""Config file selection, engine endpoint and key resolution. The active config
+is chosen once per process: --config, then $BENCH_CONFIG, then config.yaml."""
+
 import logging
 import os
 from functools import lru_cache
@@ -12,7 +15,8 @@ DATA = ROOT / "data"
 CACHE = ROOT / ".cache"
 TASKS = ("choice", "score", "noul")
 DEFAULT_KEY_ENV = "OPENROUTER_API_KEY"
-PLACEHOLDERS = ("sk-or-v1-...", "apikey_...")
+# The example values in .env.example. A copied-but-unedited file must fail like a missing key.
+PLACEHOLDERS = ("sk-or-v1-...", "apikey_...", "sk-proj-...")
 
 load_dotenv(ROOT / ".env")
 
@@ -37,6 +41,7 @@ def load() -> dict:
     return _load(config_path())
 
 
+# Cached per path, so tests that switch configs within one process get a fresh load.
 @lru_cache
 def _load(path: Path) -> dict:
     if not path.exists():
@@ -49,13 +54,14 @@ def results_dir() -> Path:
     return ROOT / load().get("results_dir", "results")
 
 
-def engines() -> dict:
-    return dict(load()["engines"])
+def engines(include_disabled: bool = False) -> dict:
+    """Engines in config order, skipping any marked `enabled: false` unless asked."""
+    return {k: v for k, v in load()["engines"].items() if include_disabled or v.get("enabled", True)}
 
 
 def engine_order(names) -> list[str]:
     """Configured engines in config order, then any others sorted."""
-    names, known = set(names), list(engines())
+    names, known = set(names), list(engines(include_disabled=True))
     return [e for e in known if e in names] + sorted(names - set(known))
 
 

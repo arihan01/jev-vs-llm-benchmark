@@ -45,6 +45,8 @@ def with_progress(sc: pd.DataFrame, expected: dict[tuple[str, str], int]) -> pd.
     if not expected or sc.empty:
         return sc
     sc = sc.copy()
+    # An (exp, engine) pair unknown to the active config counts as complete, so a scorecard
+    # produced under another config still renders.
     sc["expected"] = [expected.get((e, n), a) for e, n, a in zip(sc.exp, sc.engine, sc.attempted, strict=True)]
     sc["deferred"] = (sc["expected"] - sc["attempted"]).clip(lower=0)
     return sc
@@ -92,16 +94,22 @@ def verdict(sc: pd.DataFrame, raw: pd.DataFrame) -> str:
             f"${pick.cost_per_100_questions:.4f} per 100 questions, invalid {_f(pick.invalid_rate, True)}, "
             f"errors {_f(pick.error_rate, True)}.",
             "",
-            "| engine | accuracy | consistent | p50 ms | tokens in/out | $ / 100 q | invalid | inj. success |",
-            "|---|---|---|---|---|---|---|---|",
+            "| engine | accuracy | label consistent | prob. consistent | p50 ms "
+            "| tokens in/out | $ / 100 q | $ / correct | invalid |",
+            "|---|---|---|---|---|---|---|---|---|",
         ]
         for _, r in t.iterrows():
+            per_correct = r.get("cost_per_correct")
             lines.append(
-                f"| {r.engine} | {_f(r.accuracy, True)} | {_f(r.consistency, True)} | "
+                f"| {r.engine} | {_f(r.accuracy, True)} | "
+                f"{_f(r.consistency, True)} | {_f(r.get('prob_consistency'), True)} | "
                 f"{_f(r.p50_latency_ms, digits=4)} | {r.tokens_in:,} / {r.tokens_out:,} | "
-                f"{r.cost_per_100_questions:.4f} | {_f(r.invalid_rate, True)} | "
-                f"{_f(r.get('injection_success'), True)} |"
+                f"{r.cost_per_100_questions:.4f} | {'n/a' if pd.isna(per_correct) else f'{per_correct:.6f}'} | "
+                f"{_f(r.invalid_rate, True)} |"
             )
+        reasons = [f"{r.engine}: {r.invalid_reasons}" for _, r in t.iterrows() if r.get("invalid_reasons")]
+        if reasons:
+            lines += ["", "Invalid answers by reason: " + " · ".join(reasons) + "."]
         extra = [f"{r.engine} MAE {_f(r.mae)}" for _, r in t.iterrows() if "mae" in r and pd.notna(r.get("mae"))]
         extra += [
             f"{r.engine} AUROC {_f(r.auroc)} / Brier {_f(r.brier)}"
@@ -116,7 +124,15 @@ def verdict(sc: pd.DataFrame, raw: pd.DataFrame) -> str:
         "",
         "- LLM confidence is self-reported (asked for in the JSON), not a probability; Jev's is a model "
         "probability. Compare calibration with that in mind.",
-        "- Jev's run-to-run variance shows up in the `consistent` column; it is reported, not hidden.",
+        "- `label consistent` = all 3 repeats gave the same valid label; `prob. consistent` = 1 - mean largest "
+        "total-variation distance between repeats' probability distributions, so it also catches drift in "
+        "Jev's probabilities that leaves the label unchanged. LLM distributions are derived from one "
+        "self-reported confidence.",
+        "- Typo, paraphrase, padding and distractor are realistic noise; S5 is the unaltered text, as a control.",
+        "- `invalid` = an HTTP 200 whose answer could not be scored (unparseable JSON, label outside the "
+        "options). Provider errors returned inside a 200 body are retried, not counted as invalid.",
+        "- `stat` (if enabled) is TF-IDF + logistic regression trained on each dataset's train split; it "
+        "answers Q1 only, since Q2 has no training data.",
         "- Invalid LLM outputs count as wrong (and as maximum error for Score MAE).",
         "- Q2 questions and their gold answers are hand-written; Q1 uses the dataset's human label.",
         "- Latency is measured over the shared OpenRouter gateway at concurrency 5; compare engines, not absolutes.",

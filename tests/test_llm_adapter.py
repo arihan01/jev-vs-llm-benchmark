@@ -50,6 +50,10 @@ def test_default_temperature_omits_field():
         ("[1, 2]", None),
         ("not json at all", None),
         ("{broken", None),
+        ("{\u201clabel\u201d: \u201c1\u201d, \u201cconfidence\u201d: 0.5}", {"label": "1", "confidence": 0.5}),
+        ("{label: '1', confidence: 0.5,}", {"label": "1", "confidence": 0.5}),
+        ('{"label": "1", "confidence": 0.5', {"label": "1", "confidence": 0.5}),
+        ('Answer: {"label": "1", "confidence": 0.5, "sure": True,}', {"label": "1", "confidence": 0.5, "sure": True}),
         ("", None),
     ],
 )
@@ -144,3 +148,14 @@ def test_missing_or_broken_confidence_is_neutral_not_zero(content):
     p = llm().parse(Q_SCORE, resp(content))
     assert p.valid and p.confidence == pytest.approx(1 / 3)
     assert p.probs == pytest.approx({"0": 1 / 3, "1": 1 / 3, "2": 1 / 3})
+
+
+def test_cached_prompt_tokens_are_billed_at_the_cached_price():
+    a = llm(price_in=2, price_out=10, price_cached=0.2)
+    usage = {"prompt_tokens": 1000, "completion_tokens": 100, "prompt_tokens_details": {"cached_tokens": 600}}
+    p = a.parse(Q_SCORE, {"choices": [{"message": {"content": '{"label": "1", "confidence": 1}'}}], "usage": usage})
+    assert p.cost == pytest.approx((400 * 2 + 600 * 0.2 + 100 * 10) / 1e6)
+    # without price_cached the cached tokens cost full price
+    assert llm(price_in=2).parse(
+        Q_SCORE, {"choices": [{"message": {"content": '{"label": "1"}'}}], "usage": usage}
+    ).cost == pytest.approx(1000 * 2 / 1e6)

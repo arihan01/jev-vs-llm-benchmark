@@ -1,4 +1,8 @@
+"""Shared adapter machinery: the Prediction record, HTTP call with retries and
+rate limiting, and the cost rule. Engine-specific adapters subclass Adapter."""
+
 import asyncio
+import json
 import re
 import time
 from dataclasses import dataclass, field
@@ -8,6 +12,8 @@ from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt, wait
 
 from ..config import engine_url
 
+# Six attempts with jittered backoff (1 s doubling, capped at 30 s) ride out a burst of
+# 5xx/429 responses without hiding a real outage for long.
 RETRY_ATTEMPTS = 6
 RETRY_WAIT = wait_exponential_jitter(initial=1, max=30)
 
@@ -56,13 +62,35 @@ class DailyLimitError(HTTPStatusError):
     within minutes cannot succeed, so it is never retried."""
 
 
+# OpenRouter's per-day 429 body names the daily quota; a per-minute 429 does not.
 DAILY_LIMIT = re.compile(r"per[- ]day|daily", re.I)
+
+
+def provider_error(data) -> int | None:
+    """OpenRouter can answer 200 with an upstream failure in the body (an `error`
+    object, or a choice that ended with finish_reason "error"). Returns the status
+    to treat it as, so it is retried like any 5xx instead of scored as a wrong answer."""
+    if not isinstance(data, dict):
+        return None
+    if isinstance(data.get("error"), dict):
+        code = data["error"].get("code")
+        return code if isinstance(code, int) and code >= 400 else 502
+    choices = data.get("choices")
+    if (
+        isinstance(choices, list)
+        and choices
+        and isinstance(choices[0], dict)
+        and choices[0].get("finish_reason") == "error"
+    ):
+        return 502
+    return None
 
 
 def _retryable(e: BaseException) -> bool:
     if isinstance(e, DailyLimitError):
         return False
     if isinstance(e, HTTPStatusError):
+        # Other 4xx are request bugs; retrying cannot fix them.
         return e.status == 429 or e.status >= 500
     return isinstance(e, (httpx.TransportError, httpx.TimeoutException))
 
@@ -85,10 +113,15 @@ class Adapter:
 
     def cost(self, usage: dict, tokens_in: int, tokens_out: int) -> float:
         """usage.cost when the provider reports it, else tokens × the configured
-        price (USD per million tokens)."""
+        prices (USD per million tokens). Prompt tokens the provider served from its
+        cache (OpenAI's prompt_tokens_details.cached_tokens) are billed at
+        `price_cached` instead of `price_in`; without that key they cost full price."""
         if usage.get("cost") is not None:
             return float(usage["cost"])
-        return (tokens_in * self.spec.get("price_in", 0) + tokens_out * self.spec.get("price_out", 0)) / 1e6
+        price_in, price_out = self.spec.get("price_in", 0), self.spec.get("price_out", 0)
+        cached = int((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0)
+        price_cached = self.spec.get("price_cached", price_in)
+        return ((tokens_in - cached) * price_in + cached * price_cached + tokens_out * price_out) / 1e6
 
     def build_request(self, q: dict, text, temperature=0.0) -> dict:
         raise NotImplementedError
@@ -120,5 +153,9 @@ class Adapter:
                 if r.status_code != 200:
                     n429 += r.status_code == 429
                     raise HTTPStatusError(r.status_code, r.text)
-                return {"response": r.json(), "latency_ms": latency, "status": 200, "retries_429": n429}
+                data = r.json()
+                if err := provider_error(data):
+                    raise HTTPStatusError(err, json.dumps(data))
+                return {"response": data, "latency_ms": latency, "status": 200, "retries_429": n429}
+        # Unreachable: AsyncRetrying re-raises the last error once attempts run out.
         raise RuntimeError("retry loop exited without a result")

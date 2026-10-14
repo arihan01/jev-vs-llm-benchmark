@@ -12,9 +12,9 @@ answer **T**. The grid is small enough to inspect by hand.
 
 | | |
 |---|---|
-| Engines | `jev` typesafe/jev-1.13 (Decisions API) · `low` qwen/qwen3.5-9b · `high` anthropic/claude-opus-5.5 |
+| Engines | `jev` typesafe/jev-1.13 (Decisions API) · `low` qwen/qwen3.5-9b · `high` gpt-6-sol (OpenAI direct, reasoning off) |
 | Experiments | E1 Choice (Banking77) · E2 Noul (BoolQ) · E3 Score (Yelp) |
-| Samples | S1–S5 per experiment, one perturbation each: typo, paraphrase, padding, distractor, injection |
+| Samples | S1–S5 per experiment: typo, paraphrase, padding, distractor, and S5 unaltered as a control |
 | Questions | Q1 = the dataset's task with its human label · Q2 = a hand-written second question |
 | Repeats | 3 per engine × question, temperature 0 |
 | Total | 3 × 5 × 2 × 3 × 3 = **270 calls** |
@@ -31,7 +31,7 @@ flowchart LR
 
 ```bash
 make setup               # .venv + package + dev tools (Python 3.11+)
-cp .env.example .env     # add OPENROUTER_API_KEY, the only key needed
+cp .env.example .env     # add OPENROUTER_API_KEY and OPENAI_API_KEY
 make experiments-llm     # fill the three S2 paraphrases
 # edit data/experiments.json: write Q2 + gold for all 15 samples (see below)
 make validate            # readiness check
@@ -40,6 +40,12 @@ make smoke               # 9 live calls (each engine × experiment on S1Q1)
 make bench               # 270 calls, then the report
 make dashboard
 ```
+
+**From the dashboard** (`make dashboard`): the sidebar picks the config; **Config** toggles engines, swaps
+models and prices, and edits samples, golds and Q2s in `data/experiments.json` (a Reset button restores a sample from `data/experiments.original.json`, the untouched build written by `make experiments`); **Run** shows which keys are set, runs a
+dry estimate or a live run with optional filters, and streams the log. `stat` (TF-IDF + logistic regression
+trained on each dataset's train split, local, Q1 only) ships disabled; pick it in the Run page's engine filter
+for a one-off run, or enable it on the Config page.
 
 `make help` lists every target. Any target accepts `CONFIG=<file>` to use another config (see
 [Free trial](#free-trial)). The CLI is also installed as `jev-bench` (same flags as
@@ -86,7 +92,7 @@ make bench CONFIG=config.free.yaml       # or: BENCH_CONFIG=config.free.yaml jev
   fallback for `high` is `nvidia/nemotron-3-super-120b-a12b:free`.
 
 Per-engine settings (any config): `base_url`, `api_key_env`, `structured_output`, `reasoning`,
-`max_tokens`, `concurrency`, `rpm`, `price_in`, `price_out`. OpenRouter-only request fields (`usage`, `reasoning`) are sent only to
+`max_tokens`, `concurrency`, `rpm`, `price_in`, `price_out`, `price_cached` (for prompt tokens the provider reports as cached). OpenRouter-only request fields (`usage`, `reasoning`) are sent only to
 OpenRouter.
 
 ## Writing Q2
@@ -109,7 +115,7 @@ away the Q2s.
 ## How it works
 
 The full pipeline diagram and the `EiSjQp × engine × repeat` index scheme are in
-[docs/experiment.md](docs/experiment.md).
+[docs/experiment.md](docs/experiment.md). What is sent to each engine, what comes back and how it is parsed and scored, as one diagram: [docs/dataflow.md](docs/dataflow.md).
 
 - **Same words**: Jev gets `instructions` + option text as fields; the LLMs get the same strings in the
   fixed template below (checked in `tests/test_prompts.py`). No few-shot examples.
@@ -135,7 +141,7 @@ Return {"label": <one option key>, "confidence": <0-1>}.
 |---|---|
 | `results/raw.parquet` | one row per attempted call: exp, sample, question, perturbation, engine, repeat, gold, label, value, probs, confidence, correct, valid, structured_output, latency, tokens, cost, status, error |
 | `results/cells.csv` | one row per `EiSjQp × engine`: the 3 answers, majority-correct, consistent, mean latency / tokens / cost, P(gold) mean and std, MAE or Brier |
-| `results/scorecard.csv` | experiment × engine: expected / attempted / answered / deferred calls, accuracy, consistency, invalid and error rate, p50/p95 latency, total tokens and cost, cost per 100 questions, Noul AUROC / Brier, Score MAE, injection success |
+| `results/scorecard.csv` | experiment × engine: expected / attempted / answered / deferred calls, accuracy, consistency, invalid and error rate, p50/p95 latency, total tokens and cost, cost per 100 questions, Noul AUROC / Brier, Score MAE |
 | `results/verdict.md` | per primitive: which engine, latency, tokens, cost, error rate, caveats |
 | `results/report.md` | `make export`: the write-up in six sections: the experiment, what is measured, the inputs with examples and their T, the run report (headline numbers, ✓/✗ grid, what stands out, speed, tokens, accuracy by change), source excerpts of the core code, and observations. Cost columns are omitted when any engine is free-tier. Observations are stage 2: write `observations.md` next to the report (by hand or in an LLM session) and re-export to include it. Aggregates only, no charts |
 | `results/report.pdf` | `make export PDF=1`: the same report as a landscape PDF with wrapped tables; needs `pip install -e '.[pdf]'` (WeasyPrint; on macOS also `brew install pango`) |
@@ -170,7 +176,7 @@ bench/
   config.py            config selection (--config / BENCH_CONFIG), per-engine URL + key, logging
   data.py              sample + freeze data/{task}.jsonl (300 per task, seed 42)
   prompts.py           question rendering for Jev and the LLM template
-  perturb.py           typo / padding / distractor / injection / paraphrase
+  perturb.py           typo / padding / distractor / paraphrase
   build_experiments.py data/experiments.json builder + readiness checks
   adapters/            base.py (HTTP, retries, timing), jev.py (Decisions API), llm.py (chat + JSON schema)
   cache.py runner.py   cached async calls -> results/raw.parquet
@@ -189,8 +195,8 @@ tests/                 offline unit + pipeline tests
 - Every response is written to `.cache/` before it is scored. Re-running `make bench` makes no calls and
   reproduces the same scorecard, and partial runs merge into one table.
 - `make dry` estimates cost from prompt length and the `price_in` / `price_out` values in
-  `config.yaml`. The real cost comes from each response's `usage.cost`. Expect about $1 in total,
-  almost all of it Opus.
+  `config.yaml`. The real cost comes from each response's `usage.cost`. OpenAI reports no cost, so
+  `high`'s cost is tokens × its `price_in` / `price_out`; set those from openai.com/api/pricing.
 
 ## Troubleshooting
 

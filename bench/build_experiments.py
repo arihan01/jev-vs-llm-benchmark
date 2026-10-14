@@ -14,6 +14,7 @@ from .data import items
 
 PATH = DATA / "experiments.json"
 log = logging.getLogger(__name__)
+# Paraphrases need a model call, so build() marks them and `--llm` fills them in a second pass.
 PENDING = "paraphrase (pending)"
 
 
@@ -44,17 +45,19 @@ def q2_stub(task: str) -> dict:
 
 
 def build_sample(task: str, idx: int, item: dict, kind: str, pool: list[dict], seed: int) -> dict:
+    # Seeded per item and perturbation, so a rebuild reproduces the same typos, filler
+    # and distractor.
     rng = random.Random(f"{seed}-{item['item_id']}-{kind}")
-    text, target = item["text"], None
+    text = item["text"]
     if kind == "typo":
         text = perturb.map_text(text, lambda s: perturb.typo(s, rng))
     elif kind == "padding":
+        # BoolQ: pad the passage only; the question must stay intact.
         text = perturb.map_text(text, lambda s: perturb.pad(s, rng), fields=("passage",))
     elif kind == "distractor":
         text = perturb.distractor(task, item, rng, pool)
-    elif kind == "injection":
-        target = perturb.injection_target(task, item["gold"], rng)
-        text = perturb.inject(text, target)
+    elif kind == "clean":
+        pass  # the unaltered dataset text, as a control
     elif kind == "paraphrase":
         kind = PENDING
     else:
@@ -65,7 +68,6 @@ def build_sample(task: str, idx: int, item: dict, kind: str, pool: list[dict], s
         "perturbation": kind,
         "clean_text": item["text"],
         "text": text,
-        "injection_target": target,
         "questions": [prompts.q1(task, item["gold"]), q2_stub(task)],
     }
 
@@ -81,7 +83,9 @@ def build() -> dict:
             "type": spec["type"],
             "task": task,
             "samples": [
-                build_sample(task, i, it, kinds[i % len(kinds)], pool, cfg["seed"]) for i, it in enumerate(pool)
+                # S1..S5 take the perturbations in config order
+                build_sample(task, i, it, kinds[i % len(kinds)], pool, cfg["seed"])
+                for i, it in enumerate(pool)
             ],
         }
     return out
@@ -126,8 +130,31 @@ def todo_report(exps: dict) -> list[str]:
     return problems
 
 
-def save(exps: dict) -> None:
-    PATH.write_text(json.dumps(exps, indent=2, ensure_ascii=False) + "\n")
+def save(exps: dict, path=None) -> None:
+    # PATH is looked up at call time so tests that redirect it never touch data/.
+    (path or PATH).write_text(json.dumps(exps, indent=2, ensure_ascii=False) + "\n")
+
+
+def original_path():
+    """Pristine copy next to PATH, written by build/--llm and never by the dashboard;
+    "Reset sample" restores from it."""
+    return PATH.with_name("experiments.original.json")
+
+
+def original() -> dict:
+    """The untouched build. Older checkouts have no snapshot yet, so the current
+    file becomes the master the first time it is asked for."""
+    if not original_path().exists():
+        save(load_experiments(), original_path())
+    return json.loads(original_path().read_text())
+
+
+def reset_sample(exps: dict, exp: str, sample_id: str) -> dict:
+    """Replace one sample (text, questions, golds) with its original and return it."""
+    src = next(s for s in original()[exp]["samples"] if s["id"] == sample_id)
+    samples = exps[exp]["samples"]
+    samples[[s["id"] for s in samples].index(sample_id)] = src
+    return src
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -152,6 +179,7 @@ def main(argv: list[str] | None = None) -> None:
     else:
         exps = build()
     save(exps)
+    save(exps, original_path())
     todo = todo_report(exps)
     log.info("wrote %s; %d item(s) still need attention", PATH.name, len(todo))
     for t in todo:

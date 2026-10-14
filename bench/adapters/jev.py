@@ -1,3 +1,6 @@
+"""Adapter for Jev (TypeSafe System One): one request per question, answers
+with a probability distribution over the options."""
+
 from .. import prompts
 from .base import Adapter, Prediction
 

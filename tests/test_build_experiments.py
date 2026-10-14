@@ -25,12 +25,11 @@ def test_build_assigns_perturbations_in_config_order():
         assert all([q["id"] for q in s["questions"]] == ["Q1", "Q2"] for s in spec["samples"])
 
 
-def test_injection_only_on_injection_sample():
+def test_clean_sample_keeps_the_dataset_text():
     for spec in bx.build().values():
         for s in spec["samples"]:
-            assert (s["injection_target"] is not None) == (s["perturbation"] == "injection")
-            if s["injection_target"]:
-                assert s["injection_target"] != s["questions"][0]["gold"]
+            if s["perturbation"] == "clean":
+                assert s["text"] == s["clean_text"]
 
 
 def test_ready_file_has_no_todos(ready_experiments):
@@ -113,3 +112,12 @@ def test_load_missing_file_exits(tmp_path_file):
 def test_unknown_perturbation_rejected():
     with pytest.raises(ValueError):
         bx.build_sample("score", 0, {"item_id": "x", "text": "t", "gold": "1"}, "rot13", [], 42)
+
+
+def test_reset_sample_restores_the_original(monkeypatch, tmp_path):
+    orig = {"E1": {"samples": [{"id": "S1", "text": "clean", "questions": [{"id": "Q1", "gold": "a"}]}]}}
+    monkeypatch.setattr(bx, "PATH", tmp_path / "experiments.json")
+    bx.save(orig, bx.original_path())
+    edited = {"E1": {"samples": [{"id": "S1", "text": "edited", "questions": [{"id": "Q1", "gold": "b"}]}]}}
+    bx.reset_sample(edited, "E1", "S1")
+    assert edited == orig

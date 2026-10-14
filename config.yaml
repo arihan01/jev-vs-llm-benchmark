@@ -5,19 +5,36 @@ timeout_s: 60
 openrouter_base: https://openrouter.ai/api/v1
 jev_decisions_url: https://openrouter.ai/api/alpha/decisions
 # price_in / price_out: USD per million tokens, used only by `bench.run --dry` for a
-# cost estimate. Real cost is read from each response's usage.cost.
+# cost estimate. Real cost is read from each response's usage.cost (OpenRouter) or tokens x price (OpenAI).
 # Check current prices at https://openrouter.ai/models before relying on the estimate.
 engines:
   jev:  { kind: jev, model: typesafe/jev-1.13, price_in: 0.042, price_out: 0 }
-  low:  { kind: llm, model: qwen/qwen3.5-9b, reasoning: off, price_in: 0.05, price_out: 0.15 }
-  high: { kind: llm, model: anthropic/claude-opus-5.5, price_in: 5, price_out: 25 }
+  # No JSON schema: with one, Qwen's provider hangs on the numeric Score keys ("0"-"4") and emits
+  # whitespace until max_tokens. The prompt still asks for the same JSON, parsed from plain text.
+  low:  { kind: llm, model: qwen/qwen3.5-9b, reasoning: off, structured_output: false, price_in: 0.05, price_out: 0.15 }
+  # OpenAI direct with OPENAI_API_KEY, no reasoning and terse output. OpenAI reports no cost,
+  # so cost is tokens x price: confirm prices at https://openai.com/api/pricing.
+  # temperature: null because GPT-5+ models reject anything but their default.
+  high:
+    kind: llm
+    model: gpt-6-sol
+    base_url: https://api.openai.com/v1
+    api_key_env: OPENAI_API_KEY
+    temperature: null
+    max_tokens: 400
+    extra: { reasoning_effort: none, verbosity: low }   # gpt-6.1-sol and gpt-6-astra reject "none"
+    price_in: 2
+    price_out: 10
+    price_cached: 0.2   # cached prompt tokens, applied when usage reports prompt_tokens_details.cached_tokens
+  # TF-IDF + logistic regression trained on each dataset's train split; local, no key, Q1 only.
+  stat: { kind: baseline, model: tfidf-logreg, enabled: false }
 perturb_generator: { model: google/gemini-3.5-flash-lite }   # not under test
 experiments:
   E1: { type: choice, task: choice }   # task = key into data/{task}.jsonl
   E2: { type: noul,   task: noul }
   E3: { type: score,  task: score }
 samples: 5
-sample_perturbations: [typo, paraphrase, padding, distractor, injection]   # S1..S5 in order
+sample_perturbations: [typo, paraphrase, padding, distractor, clean]   # S1..S5 in order
 tasks:
   choice: { dataset: PolyAI/banking77, split: test }
   score:  { dataset: Yelp/yelp_review_full, split: test, truncate_chars: 2000 }
